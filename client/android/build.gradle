@@ -1,0 +1,42 @@
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
+
+buildscript {
+    
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.13.0'
+        classpath 'com.google.gms:google-services:4.4.4'
+
+        // NOTE: Do not place your application dependencies here; they belong
+        // in the individual module build.gradle files
+    }
+}
+
+apply from: "variables.gradle"
+
+// Keep generated files out of OneDrive and node_modules. OneDrive can lock
+// incremental compiler outputs before Gradle has a chance to replace them.
+rootProject.buildDir = new File(gradle.gradleUserHomeDir, "musicwave-build/${rootProject.name}")
+
+subprojects {
+    // Android Studio discovers the installable APK from app/build. Only move
+    // Capacitor library outputs, which otherwise end up under node_modules.
+    if (project.name != 'app') {
+        project.buildDir = new File(rootProject.buildDir, project.name)
+    }
+}
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+task clean(type: Delete) {
+    delete rootProject.buildDir
+}
+

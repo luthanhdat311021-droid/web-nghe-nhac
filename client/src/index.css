@@ -1,0 +1,174 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+    --sat: env(safe-area-inset-top, 0px);
+    --sab: env(safe-area-inset-bottom, 0px);
+    --sal: env(safe-area-inset-left, 0px);
+    --sar: env(safe-area-inset-right, 0px);
+  }
+  
+  * {
+    -webkit-tap-highlight-color: transparent;
+    box-sizing: border-box;
+  }
+
+  html, body {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+    touch-action: manipulation;
+  }
+
+  body {
+    background-color: #090a0f;
+    color: #f8fafc;
+    min-height: 100vh;
+    min-height: -webkit-fill-available;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Sleek minimalist scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.22);
+  }
+}
+
+@layer utilities {
+  /* Subtle, purposeful surface cards */
+  .surface-card {
+    background: #111319;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .surface-card-hover {
+    transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+  }
+  .surface-card-hover:hover {
+    background: #171a23;
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+
+  /* Clean player and bar containers */
+  .player-bar {
+    background: rgba(15, 17, 23, 0.94);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .mini-player-card {
+    background: rgba(18, 20, 28, 0.96);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  /* Safe Area insets utility classes */
+  .pt-safe {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .pl-safe {
+    padding-left: env(safe-area-inset-left, 0px);
+  }
+  .pr-safe {
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+
+  /* Hide scrollbar for clean horizontal carousels */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* Touch tap target standard */
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Human-made icon button utilities */
+  .icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    transition: background-color 150ms ease, color 150ms ease, transform 150ms ease;
+    user-select: none;
+  }
+  .icon-btn:active {
+    transform: scale(0.94);
+  }
+  .icon-btn:focus-visible {
+    outline: 2px solid rgba(255, 255, 255, 0.4);
+    outline-offset: 2px;
+  }
+
+  /* Optical alignment for Play triangle icon */
+  .optical-play {
+    transform: translateX(0.75px);
+  }
+
+  /* Instant UI responsiveness utilities */
+  .btn-press {
+    transition: transform 120ms cubic-bezier(0.2, 0, 0, 1), opacity 120ms ease;
+  }
+  .btn-press:active {
+    transform: scale(0.96);
+  }
+
+  .interactive-card {
+    will-change: transform;
+    transform: translateZ(0);
+  }
+}
+
+
+/* Custom Input Range Slider */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 9999px;
+  outline: none;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #ffffff;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+input[type="range"]:hover::-webkit-slider-thumb,
+input[type="range"]:active::-webkit-slider-thumb {
+  transform: scale(1.2);
+  background: #ffffff;
+}
+

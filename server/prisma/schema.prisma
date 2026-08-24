@@ -1,0 +1,292 @@
+// Prisma Schema for MusicWave
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id           String    @id @default(uuid())
+  username     String    @unique
+  email        String    @unique
+  passwordHash String
+  avatarUrl    String?
+  bio          String?
+  role         String    @default("USER") // USER | ADMIN
+  isBlocked    Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  playlists      Playlist[]
+  favorites      Favorite[]
+  recentlyPlayed RecentlyPlayed[]
+  following      Follower[]
+  notifications      Notification[]
+  createdArtists     Artist[]           @relation("ArtistCreatedBy")
+  createdSongs       Song[]             @relation("SongCreatedBy")
+  passwordResetOtps  PasswordResetOtp[]
+
+  @@index([role])
+  @@index([isBlocked])
+  @@index([createdAt])
+  @@map("users")
+}
+
+model Artist {
+  id               String    @id @default(uuid())
+  name             String    @unique
+  avatarUrl        String
+  bannerUrl        String?
+  biography        String?
+  verified         Boolean   @default(false)
+  country          String?
+  monthlyListeners Int       @default(0)
+  createdBy        String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  creator   User?      @relation("ArtistCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  albums    Album[]
+  songs     Song[]
+  followers Follower[]
+
+  @@index([monthlyListeners(sort: Desc)])
+  @@index([createdBy])
+  @@map("artists")
+}
+
+model Album {
+  id          String    @id @default(uuid())
+  title       String
+  coverUrl    String
+  releaseDate DateTime  @default(now())
+  description String?
+  artistId    String
+  genreId     String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  artist Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  genre  Genre? @relation(fields: [genreId], references: [id], onDelete: SetNull)
+  songs  Song[]
+
+  @@index([artistId])
+  @@index([genreId])
+  @@index([releaseDate(sort: Desc)])
+  @@map("albums")
+}
+
+model Genre {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  slug      String   @unique
+  coverUrl  String?
+  color     String   @default("#8b5cf6")
+  createdAt DateTime @default(now())
+
+  songs  Song[]
+  albums Album[]
+
+  @@map("genres")
+}
+
+model Song {
+  id          String    @id @default(uuid())
+  title       String
+  artistId    String
+  albumId     String?
+  genreId     String?
+  duration    Int       // in seconds
+  audioUrl    String
+  coverUrl    String
+  sourceType  String    @default("url") // url | youtube | upload
+  youtubeUrl  String?
+  youtubeId   String?
+  playsCount  Int       @default(0)
+  releaseDate DateTime  @default(now())
+  isTrending  Boolean   @default(false)
+  isFeatured  Boolean   @default(false)
+  createdBy   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  creator        User?            @relation("SongCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  artist         Artist           @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  album          Album?           @relation(fields: [albumId], references: [id], onDelete: SetNull)
+  genre          Genre?           @relation(fields: [genreId], references: [id], onDelete: SetNull)
+  lyrics         Lyrics?
+  playlistSongs  PlaylistSong[]
+  favorites      Favorite[]
+  recentlyPlayed RecentlyPlayed[]
+
+  @@index([artistId])
+  @@index([albumId])
+  @@index([genreId])
+  @@index([isTrending, playsCount(sort: Desc)])
+  @@index([isFeatured, createdAt(sort: Desc)])
+  @@index([playsCount(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+  @@map("songs")
+}
+
+model Lyrics {
+  id           String   @id @default(uuid())
+  songId       String   @unique
+  plainLyrics  String
+  syncedLyrics String?  // JSON array of { time: number, text: string } or LRC string
+  isSynced     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  song Song @relation(fields: [songId], references: [id], onDelete: Cascade)
+
+  @@map("lyrics")
+}
+
+model Playlist {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  coverUrl    String?
+  isPublic    Boolean  @default(true)
+  userId      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  songs PlaylistSong[]
+
+  @@index([userId])
+  @@index([isPublic])
+  @@index([updatedAt(sort: Desc)])
+  @@map("playlists")
+}
+
+model PlaylistSong {
+  id         String   @id @default(uuid())
+  playlistId String
+  songId     String
+  position   Int      @default(0)
+  addedAt    DateTime @default(now())
+
+  playlist Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  song     Song     @relation(fields: [songId], references: [id], onDelete: Cascade)
+
+  @@unique([playlistId, songId])
+  @@index([songId])
+  @@index([playlistId, position(sort: Asc)])
+  @@map("playlist_songs")
+}
+
+model Favorite {
+  id        String   @id @default(uuid())
+  userId    String
+  songId    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  song Song @relation(fields: [songId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, songId])
+  @@index([songId])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("favorites")
+}
+
+model RecentlyPlayed {
+  id             String   @id @default(uuid())
+  userId         String
+  songId         String
+  playedAt       DateTime @default(now())
+  durationPlayed Int      @default(0)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  song Song @relation(fields: [songId], references: [id], onDelete: Cascade)
+
+  @@index([userId, playedAt(sort: Desc)])
+  @@index([songId])
+  @@map("recently_played")
+}
+
+model Follower {
+  id        String   @id @default(uuid())
+  userId    String
+  artistId  String
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  artist Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, artistId])
+  @@index([artistId])
+  @@index([userId])
+  @@map("followers")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead, createdAt(sort: Desc)])
+  @@map("notifications")
+}
+
+model PasswordResetOtp {
+  id         String    @id @default(uuid())
+  userId     String
+  otpHash    String
+  expiresAt  DateTime
+  attempts   Int       @default(0)
+  usedAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, expiresAt])
+  @@map("password_reset_otps")
+}
+
+model ImportBatch {
+  id           String          @id @default(uuid())
+  totalFiles   Int
+  successCount Int
+  failedCount  Int
+  createdBy    String?
+  createdAt    DateTime        @default(now())
+  logs         ImportItemLog[]
+
+  @@index([createdAt(sort: Desc)])
+  @@map("import_batches")
+}
+
+model ImportItemLog {
+  id           String      @id @default(uuid())
+  batchId      String
+  filename     String
+  songTitle    String?
+  artistName   String?
+  status       String      // SUCCESS | FAILED | SKIPPED
+  errorMessage String?
+  songId       String?
+  createdAt    DateTime    @default(now())
+
+  batch        ImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@index([batchId])
+  @@index([createdAt(sort: Desc)])
+  @@map("import_item_logs")
+}
+
+

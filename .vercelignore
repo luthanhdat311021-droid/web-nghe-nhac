@@ -1,0 +1,17 @@
+node_modules
+client/node_modules
+client/android
+client/dist
+.git
+.github
+/data/
+/data
+!client/src/data/**
+web nghe nhac
+uploads
+server/uploads
+*.log
+*.apk
+*.aab
+.gradle
+.idea

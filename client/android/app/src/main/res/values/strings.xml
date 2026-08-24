@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">MusicWave</string>
+    <string name="title_activity_main">MusicWave</string>
+    <string name="package_name">com.musicwave.app</string>
+    <string name="custom_url_scheme">com.musicwave.app</string>
+</resources>
