@@ -6,6 +6,7 @@ import { adminService } from '../../services/admin.service.js';
 import { Button } from '../../components/common/Button.js';
 import { ArtistModal } from '../../components/admin/ArtistModal.js';
 import { formatNumber } from '../../utils/format.js';
+import { queryClient } from '../../services/queryClient.js';
 
 export const AdminArtists: React.FC = () => {
   const [artists, setArtists] = useState<Artist[]>([]);
@@ -49,6 +50,9 @@ export const AdminArtists: React.FC = () => {
     try {
       await adminService.deleteArtist(id);
       fetchArtists();
+      queryClient.invalidateQueries({ queryKey: ['artists'] });
+      queryClient.invalidateQueries({ queryKey: ['songs'] });
+      queryClient.invalidateQueries({ queryKey: ['albums'] });
     } catch (e) {
       console.error(e);
     }
@@ -252,7 +256,10 @@ export const AdminArtists: React.FC = () => {
       <ArtistModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        onSuccess={fetchArtists}
+        onSuccess={() => {
+          fetchArtists();
+          queryClient.invalidateQueries({ queryKey: ['artists'] });
+        }}
         artist={selectedArtist}
       />
     </div>

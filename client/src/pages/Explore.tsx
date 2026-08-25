@@ -46,15 +46,7 @@ export const Explore: React.FC = () => {
       }
       return res;
     },
-    initialData:
-      !selectedGenre && page === 1
-        ? {
-            items: INITIAL_TRENDING_SONGS,
-            pagination: { page: 1, limit: 16, total: INITIAL_TRENDING_SONGS.length, totalPages: 1 },
-          }
-        : undefined,
     placeholderData: (prev) => prev,
-    staleTime: 1000 * 60 * 5,
   });
 
   const songs = songsData?.items || [];

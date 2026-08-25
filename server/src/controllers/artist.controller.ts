@@ -7,13 +7,14 @@ import { appCache } from '../utils/cacheManager.js';
 
 export const getAllArtists = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { search, page = '1', limit = '20' } = req.query;
+    const { search, sort = 'popular', page = '1', limit = '20' } = req.query;
     const pageNum = Math.max(1, parseInt(page as string, 10) || 1);
     const limitNum = Math.min(100, Math.max(1, parseInt(limit as string, 10) || 20));
     const skip = (pageNum - 1) * limitNum;
 
     const cleanSearch = typeof search === 'string' ? search.trim() : '';
-    const cacheKey = `artists:list:${cleanSearch}:${pageNum}:${limitNum}`;
+    const cleanSort = typeof sort === 'string' ? sort : 'popular';
+    const cacheKey = `artists:list:${cleanSearch}:${cleanSort}:${pageNum}:${limitNum}`;
 
     const { total, artists } = await appCache.getOrSet(
       cacheKey,
@@ -22,13 +23,22 @@ export const getAllArtists = async (req: AuthenticatedRequest, res: Response) =>
           ? { name: { contains: cleanSearch, mode: 'insensitive' } }
           : {};
 
+        let orderBy: any = { monthlyListeners: 'desc' };
+        if (cleanSort === 'latest') {
+          orderBy = { createdAt: 'desc' };
+        } else if (cleanSort === 'oldest') {
+          orderBy = { createdAt: 'asc' };
+        } else if (cleanSort === 'az' || cleanSort === 'name') {
+          orderBy = { name: 'asc' };
+        }
+
         const [t, a] = await Promise.all([
           prisma.artist.count({ where }),
           prisma.artist.findMany({
             where,
             skip,
             take: limitNum,
-            orderBy: { monthlyListeners: 'desc' },
+            orderBy,
             include: {
               _count: {
                 select: { songs: true, albums: true, followers: true },
@@ -270,6 +280,10 @@ export const createArtist = async (req: AuthenticatedRequest, res: Response) => 
       },
     });
 
+    appCache.invalidatePrefix('artists:');
+    appCache.invalidatePrefix('search:');
+    appCache.invalidatePrefix('admin:dashboard');
+
     return sendSuccess(res, artist, 'Đã thêm nghệ sĩ thành công.', 201);
   } catch (error: any) {
     return sendError(res, error.message || 'Không thể tạo nghệ sĩ mới.', 500);
@@ -338,6 +352,10 @@ export const updateArtist = async (req: AuthenticatedRequest, res: Response) => 
       },
     });
 
+    appCache.invalidatePrefix('artists:');
+    appCache.invalidatePrefix('search:');
+    appCache.invalidatePrefix('admin:dashboard');
+
     return sendSuccess(res, updated, 'Đã cập nhật thông tin nghệ sĩ thành công.');
   } catch (error: any) {
     return sendError(res, error.message || 'Không thể cập nhật nghệ sĩ.', 500);
@@ -364,6 +382,11 @@ export const deleteArtist = async (req: AuthenticatedRequest, res: Response) => 
     }
 
     await prisma.artist.delete({ where: { id } });
+
+    appCache.invalidatePrefix('artists:');
+    appCache.invalidatePrefix('songs:');
+    appCache.invalidatePrefix('search:');
+    appCache.invalidatePrefix('admin:dashboard');
 
     return sendSuccess(res, null, 'Đã xóa nghệ sĩ thành công.');
   } catch (error: any) {

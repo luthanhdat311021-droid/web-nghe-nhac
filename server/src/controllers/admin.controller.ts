@@ -324,6 +324,12 @@ export const createSong = async (req: AuthenticatedRequest, res: Response) => {
       },
     });
 
+    appCache.invalidatePrefix('songs:');
+    appCache.invalidatePrefix('artists:');
+    appCache.invalidatePrefix('albums:');
+    appCache.invalidatePrefix('search:');
+    appCache.invalidatePrefix('admin:dashboard');
+
     return sendSuccess(res, song, 'Song created successfully', 201);
   } catch (error: any) {
     if (error instanceof z.ZodError) {
@@ -399,6 +405,12 @@ export const updateSong = async (req: AuthenticatedRequest, res: Response) => {
       });
     }
 
+    appCache.invalidatePrefix('songs:');
+    appCache.invalidatePrefix('artists:');
+    appCache.invalidatePrefix('albums:');
+    appCache.invalidatePrefix('search:');
+    appCache.invalidatePrefix('admin:dashboard');
+
     return sendSuccess(res, song, 'Song updated successfully');
   } catch (error: any) {
     if (error instanceof z.ZodError) {
@@ -426,6 +438,10 @@ export const deleteSong = async (req: AuthenticatedRequest, res: Response) => {
       }
       await prisma.song.delete({ where: { id } });
       appCache.invalidatePrefix('songs:');
+      appCache.invalidatePrefix('artists:');
+      appCache.invalidatePrefix('albums:');
+      appCache.invalidatePrefix('search:');
+      appCache.invalidatePrefix('admin:dashboard');
     }
     return sendSuccess(res, null, 'Song deleted successfully');
   } catch (error: any) {
@@ -488,6 +504,10 @@ export const createArtist = async (req: AuthenticatedRequest, res: Response) => 
       },
     });
 
+    appCache.invalidatePrefix('artists:');
+    appCache.invalidatePrefix('search:');
+    appCache.invalidatePrefix('admin:dashboard');
+
     return sendSuccess(res, artist, 'Artist created successfully', 201);
   } catch (error: any) {
     if (error instanceof z.ZodError) {
@@ -525,6 +545,10 @@ export const updateArtist = async (req: AuthenticatedRequest, res: Response) => 
       },
     });
 
+    appCache.invalidatePrefix('artists:');
+    appCache.invalidatePrefix('search:');
+    appCache.invalidatePrefix('admin:dashboard');
+
     return sendSuccess(res, artist, 'Artist updated successfully');
   } catch (error: any) {
     if (error instanceof z.ZodError) {
@@ -538,6 +562,11 @@ export const deleteArtist = async (req: AuthenticatedRequest, res: Response) => 
   try {
     const { id } = req.params;
     await prisma.artist.delete({ where: { id } });
+    appCache.invalidatePrefix('artists:');
+    appCache.invalidatePrefix('songs:');
+    appCache.invalidatePrefix('albums:');
+    appCache.invalidatePrefix('search:');
+    appCache.invalidatePrefix('admin:dashboard');
     return sendSuccess(res, null, 'Artist deleted successfully');
   } catch (error: any) {
     return sendError(res, error.message || 'Failed to delete artist', 500);
@@ -582,6 +611,11 @@ export const createAlbum = async (req: AuthenticatedRequest, res: Response) => {
       },
     });
 
+    appCache.invalidatePrefix('albums:');
+    appCache.invalidatePrefix('artists:');
+    appCache.invalidatePrefix('search:');
+    appCache.invalidatePrefix('admin:dashboard');
+
     return sendSuccess(res, album, 'Album created successfully', 201);
   } catch (error: any) {
     if (error instanceof z.ZodError) {
@@ -614,6 +648,11 @@ export const updateAlbum = async (req: AuthenticatedRequest, res: Response) => {
       },
     });
 
+    appCache.invalidatePrefix('albums:');
+    appCache.invalidatePrefix('artists:');
+    appCache.invalidatePrefix('search:');
+    appCache.invalidatePrefix('admin:dashboard');
+
     return sendSuccess(res, album, 'Album updated successfully');
   } catch (error: any) {
     if (error instanceof z.ZodError) {
@@ -627,6 +666,10 @@ export const deleteAlbum = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
     await prisma.album.delete({ where: { id } });
+    appCache.invalidatePrefix('albums:');
+    appCache.invalidatePrefix('artists:');
+    appCache.invalidatePrefix('search:');
+    appCache.invalidatePrefix('admin:dashboard');
     return sendSuccess(res, null, 'Album deleted successfully');
   } catch (error: any) {
     return sendError(res, error.message || 'Failed to delete album', 500);
@@ -1034,6 +1077,10 @@ export const importSingleSong = async (req: AuthenticatedRequest, res: Response)
         });
 
         appCache.invalidatePrefix('songs:');
+        appCache.invalidatePrefix('artists:');
+        appCache.invalidatePrefix('albums:');
+        appCache.invalidatePrefix('search:');
+        appCache.invalidatePrefix('admin:dashboard');
         return sendSuccess(
           res,
           {
@@ -1088,6 +1135,11 @@ export const importSingleSong = async (req: AuthenticatedRequest, res: Response)
     });
 
     appCache.invalidatePrefix('songs:');
+    appCache.invalidatePrefix('artists:');
+    appCache.invalidatePrefix('albums:');
+    appCache.invalidatePrefix('genres:');
+    appCache.invalidatePrefix('search:');
+    appCache.invalidatePrefix('admin:dashboard');
 
     return sendSuccess(
       res,

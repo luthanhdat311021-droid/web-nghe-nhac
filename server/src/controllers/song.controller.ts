@@ -586,6 +586,10 @@ export const createSong = async (req: AuthenticatedRequest, res: Response) => {
     });
 
     appCache.invalidatePrefix('songs:');
+    appCache.invalidatePrefix('artists:');
+    appCache.invalidatePrefix('albums:');
+    appCache.invalidatePrefix('search:');
+    appCache.invalidatePrefix('admin:dashboard');
     return sendSuccess(res, song, 'Đã thêm bài hát thành công.', 201);
   } catch (error: any) {
     return sendError(res, error.message || 'Không thể tạo bài hát mới.', 500);
@@ -708,6 +712,10 @@ export const updateSong = async (req: AuthenticatedRequest, res: Response) => {
     }
 
     appCache.invalidatePrefix('songs:');
+    appCache.invalidatePrefix('artists:');
+    appCache.invalidatePrefix('albums:');
+    appCache.invalidatePrefix('search:');
+    appCache.invalidatePrefix('admin:dashboard');
     return sendSuccess(res, updated, 'Đã cập nhật bài hát thành công.');
   } catch (error: any) {
     return sendError(res, error.message || 'Không thể cập nhật bài hát.', 500);
@@ -743,6 +751,10 @@ export const deleteSong = async (req: AuthenticatedRequest, res: Response) => {
     await prisma.song.delete({ where: { id } });
 
     appCache.invalidatePrefix('songs:');
+    appCache.invalidatePrefix('artists:');
+    appCache.invalidatePrefix('albums:');
+    appCache.invalidatePrefix('search:');
+    appCache.invalidatePrefix('admin:dashboard');
 
     SecurityLogger.log({
       type: 'ADMIN_ACTION',

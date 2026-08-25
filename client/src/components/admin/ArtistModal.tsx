@@ -4,6 +4,7 @@ import { adminService } from '../../services/admin.service.js';
 import { Modal } from '../common/Modal.js';
 import { Button } from '../common/Button.js';
 import { Input } from '../common/Input.js';
+import { queryClient } from '../../services/queryClient.js';
 
 interface ArtistModalProps {
   isOpen: boolean;
@@ -70,6 +71,7 @@ export const ArtistModal: React.FC<ArtistModalProps> = ({
         await adminService.createArtist(formData);
       }
 
+      queryClient.invalidateQueries({ queryKey: ['artists'] });
       onSuccess();
       onClose();
     } catch (err: any) {

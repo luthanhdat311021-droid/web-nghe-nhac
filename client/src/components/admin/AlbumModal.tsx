@@ -5,6 +5,7 @@ import { artistService } from '../../services/artist.service.js';
 import { Modal } from '../common/Modal.js';
 import { Button } from '../common/Button.js';
 import { Input } from '../common/Input.js';
+import { queryClient } from '../../services/queryClient.js';
 
 interface AlbumModalProps {
   isOpen: boolean;
@@ -79,6 +80,9 @@ export const AlbumModal: React.FC<AlbumModalProps> = ({
         await adminService.createAlbum(formData);
       }
 
+      queryClient.invalidateQueries({ queryKey: ['albums'] });
+      queryClient.invalidateQueries({ queryKey: ['artists'] });
+      queryClient.invalidateQueries({ queryKey: ['songs'] });
       onSuccess();
       onClose();
     } catch (err: any) {

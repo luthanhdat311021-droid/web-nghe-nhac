@@ -16,6 +16,7 @@ import { INITIAL_ARTISTS } from '../data/initialCatalog';
 export const Artists: React.FC = () => {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const [search, setSearch] = useState('');
+  const [sortBy, setSortBy] = useState<'popular' | 'latest' | 'az'>('popular');
   const [page, setPage] = useState(1);
 
   // Modals
@@ -23,22 +24,15 @@ export const Artists: React.FC = () => {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   const { data: artistsData, isLoading } = useQuery({
-    queryKey: QUERY_KEYS.allArtists({ search: search.trim() || undefined, page, limit: 18 }),
+    queryKey: QUERY_KEYS.allArtists({ search: search.trim() || undefined, sort: sortBy, page, limit: 18 }),
     queryFn: () =>
       artistService.getAllArtists({
         search: search.trim() || undefined,
+        sort: sortBy,
         page,
         limit: 18,
       }),
-    initialData:
-      !search.trim() && page === 1
-        ? {
-            items: INITIAL_ARTISTS,
-            pagination: { page: 1, limit: 18, total: INITIAL_ARTISTS.length, totalPages: 1 },
-          }
-        : undefined,
     placeholderData: (prev) => prev,
-    staleTime: 1000 * 60 * 5,
   });
 
   const artists = artistsData?.items || [];
@@ -62,15 +56,29 @@ export const Artists: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-white/5">
         <div>
           <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-            Nghệ sĩ thịnh hành
+            Nghệ sĩ
           </h1>
           <p className="text-xs text-text-muted mt-0.5">
             Khám phá các ca sĩ và nhà sản xuất âm nhạc
           </p>
         </div>
 
-        <div className="flex items-center gap-3 w-full md:w-auto">
-          <div className="relative flex-1 md:w-64">
+        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+          {/* Sort Dropdown */}
+          <select
+            value={sortBy}
+            onChange={(e) => {
+              setSortBy(e.target.value as any);
+              setPage(1);
+            }}
+            className="h-10 px-3 rounded-lg bg-white/[0.04] border border-white/[0.08] text-xs text-white outline-none focus:border-white/20 transition-colors cursor-pointer"
+          >
+            <option value="popular" className="bg-[#181a20] text-white">Thịnh hành nhất</option>
+            <option value="latest" className="bg-[#181a20] text-white">Mới nhất (Vừa thêm)</option>
+            <option value="az" className="bg-[#181a20] text-white">Theo tên (A-Z)</option>
+          </select>
+
+          <div className="relative flex-1 md:w-60">
             <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
             <input
               type="text"

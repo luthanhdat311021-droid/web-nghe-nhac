@@ -18,52 +18,39 @@ import {
 } from '../data/initialCatalog';
 
 // Local storage cache key for instant hydration across reloads
-const LOCAL_STORAGE_QUERY_CACHE_KEY = 'musicwave_hot_query_cache_v1';
+const LOCAL_STORAGE_QUERY_CACHE_KEY = 'musicwave_hot_query_cache_v2';
 
 /**
  * Hydrates queryClient from bundled catalog seed + localStorage immediately upon script execution (0ms)
  */
 export const hydrateQueryCacheFromStorage = () => {
   try {
-    // 1. Instant Initial Seed (Zero Millisecond First Paint)
+    // Clear deprecated v1 cache
+    try {
+      localStorage.removeItem('musicwave_hot_query_cache_v1');
+    } catch {}
+
+    // 1. Initial Seed with updatedAt: 0 (Zero Millisecond First Paint while refetching real data in background)
     if (!queryClient.getQueryData(QUERY_KEYS.trendingSongs)) {
-      queryClient.setQueryData(QUERY_KEYS.trendingSongs, INITIAL_TRENDING_SONGS);
+      queryClient.setQueryData(QUERY_KEYS.trendingSongs, INITIAL_TRENDING_SONGS, { updatedAt: 0 });
     }
     if (!queryClient.getQueryData(QUERY_KEYS.recommendedSongs)) {
-      queryClient.setQueryData(QUERY_KEYS.recommendedSongs, INITIAL_RECOMMENDED_SONGS);
+      queryClient.setQueryData(QUERY_KEYS.recommendedSongs, INITIAL_RECOMMENDED_SONGS, { updatedAt: 0 });
     }
     if (!queryClient.getQueryData(QUERY_KEYS.topCharts)) {
-      queryClient.setQueryData(QUERY_KEYS.topCharts, INITIAL_TOP_CHARTS);
+      queryClient.setQueryData(QUERY_KEYS.topCharts, INITIAL_TOP_CHARTS, { updatedAt: 0 });
     }
     if (!queryClient.getQueryData(QUERY_KEYS.popularArtists)) {
-      queryClient.setQueryData(QUERY_KEYS.popularArtists, INITIAL_ARTISTS);
+      queryClient.setQueryData(QUERY_KEYS.popularArtists, INITIAL_ARTISTS, { updatedAt: 0 });
     }
     if (!queryClient.getQueryData(QUERY_KEYS.popularAlbums)) {
-      queryClient.setQueryData(QUERY_KEYS.popularAlbums, INITIAL_ALBUMS);
+      queryClient.setQueryData(QUERY_KEYS.popularAlbums, INITIAL_ALBUMS, { updatedAt: 0 });
     }
     if (!queryClient.getQueryData(QUERY_KEYS.genres)) {
-      queryClient.setQueryData(QUERY_KEYS.genres, INITIAL_GENRES);
-    }
-    if (!queryClient.getQueryData(QUERY_KEYS.allAlbums({ page: 1, limit: 18 }))) {
-      queryClient.setQueryData(QUERY_KEYS.allAlbums({ page: 1, limit: 18 }), {
-        items: INITIAL_ALBUMS,
-        pagination: { page: 1, limit: 18, total: INITIAL_ALBUMS.length, totalPages: 1 },
-      });
-    }
-    if (!queryClient.getQueryData(QUERY_KEYS.allArtists({ page: 1, limit: 18 }))) {
-      queryClient.setQueryData(QUERY_KEYS.allArtists({ page: 1, limit: 18 }), {
-        items: INITIAL_ARTISTS,
-        pagination: { page: 1, limit: 18, total: INITIAL_ARTISTS.length, totalPages: 1 },
-      });
-    }
-    if (!queryClient.getQueryData(QUERY_KEYS.allSongs({ page: 1, limit: 16 }))) {
-      queryClient.setQueryData(QUERY_KEYS.allSongs({ page: 1, limit: 16 }), {
-        items: INITIAL_TRENDING_SONGS,
-        pagination: { page: 1, limit: 16, total: INITIAL_TRENDING_SONGS.length, totalPages: 1 },
-      });
+      queryClient.setQueryData(QUERY_KEYS.genres, INITIAL_GENRES, { updatedAt: 0 });
     }
 
-    // 2. Overwrite with persistent user cache if available
+    // 2. Overwrite with persistent user cache if available (also marked stale to ensure fresh sync)
     const raw = localStorage.getItem(LOCAL_STORAGE_QUERY_CACHE_KEY);
     if (!raw) return;
     const parsed = JSON.parse(raw);
@@ -71,7 +58,7 @@ export const hydrateQueryCacheFromStorage = () => {
       Object.entries(parsed).forEach(([keyStr, data]) => {
         try {
           const queryKey = JSON.parse(keyStr);
-          queryClient.setQueryData(queryKey, data);
+          queryClient.setQueryData(queryKey, data, { updatedAt: 0 });
         } catch {
           // ignore
         }

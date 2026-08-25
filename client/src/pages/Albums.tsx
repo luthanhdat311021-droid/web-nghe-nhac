@@ -22,15 +22,7 @@ export const Albums: React.FC = () => {
         page,
         limit: 18,
       }),
-    initialData:
-      !search.trim() && page === 1
-        ? {
-            items: INITIAL_ALBUMS,
-            pagination: { page: 1, limit: 18, total: INITIAL_ALBUMS.length, totalPages: 1 },
-          }
-        : undefined,
     placeholderData: (prev) => prev,
-    staleTime: 1000 * 60 * 5,
   });
 
   const albums = albumsData?.items || [];

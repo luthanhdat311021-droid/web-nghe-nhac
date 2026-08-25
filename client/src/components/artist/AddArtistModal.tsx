@@ -15,6 +15,7 @@ import { artistService } from '../../services/artist.service.js';
 import { Modal } from '../common/Modal.js';
 import { Button } from '../common/Button.js';
 import { Input } from '../common/Input.js';
+import { queryClient } from '../../services/queryClient.js';
 
 interface AddArtistModalProps {
   isOpen: boolean;
@@ -181,12 +182,14 @@ export const AddArtistModal: React.FC<AddArtistModalProps> = ({
         savedArtist = await artistService.createArtist(formData);
       }
 
+      queryClient.invalidateQueries({ queryKey: ['artists'] });
       onSuccess(savedArtist);
       onClose();
     } catch (err: any) {
       if (err.response?.status === 409 && err.response?.data?.data?.existingArtist) {
         const existing = err.response.data.data.existingArtist;
         // Auto-select existing artist when duplicate is encountered on create
+        queryClient.invalidateQueries({ queryKey: ['artists'] });
         onSuccess(existing);
         onClose();
         return;

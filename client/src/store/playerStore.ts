@@ -288,57 +288,93 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   },
 
   pause: () => {
-    const { audio, currentSong } = get();
-    const isYouTube = isYouTubeSource(currentSong);
+    const domAudio = getAudioElement();
+    const stateAudio = get().audio;
+    const audio = stateAudio || domAudio;
 
-    if (isYouTube) {
-      if (typeof window !== 'undefined' && window.__musicwave_yt_pause) {
-        window.__musicwave_yt_pause();
+    // 1. Pause HTML5 audio unconditionally
+    if (audio) {
+      try {
+        audio.pause();
+      } catch (e) {
+        console.warn('[MusicWave Player] HTML5 audio pause error:', e);
       }
-    } else if (isNativeAudioAvailable()) {
-      nativeAudio.pause().catch(() => {});
-    } else if (audio) {
-      audio.pause();
     }
+
+    // 2. Pause YouTube unconditionally
+    if (typeof window !== 'undefined' && window.__musicwave_yt_pause) {
+      try {
+        window.__musicwave_yt_pause();
+      } catch (e) {
+        console.warn('[MusicWave Player] YouTube pause error:', e);
+      }
+    }
+
+    // 3. Pause native audio if available
+    if (isNativeAudioAvailable()) {
+      try {
+        nativeAudio.pause().catch(() => {});
+      } catch (e) {}
+    }
+
     set({ isPlaying: false, isBuffering: false });
   },
 
   resume: () => {
-    const { audio, currentSong, volume, isMuted, playbackRate } = get();
+    const domAudio = getAudioElement();
+    const stateAudio = get().audio;
+    const audio = stateAudio || domAudio;
+    const { currentSong, volume, isMuted, playbackRate } = get();
     if (!currentSong) return;
 
     const isYouTube = isYouTubeSource(currentSong);
 
     if (isYouTube) {
+      if (audio) {
+        try {
+          audio.pause();
+        } catch (e) {}
+      }
       if (typeof window !== 'undefined' && window.__musicwave_yt_play) {
-        window.__musicwave_yt_play();
+        try {
+          window.__musicwave_yt_play();
+        } catch (e) {}
       }
       set({ isPlaying: true, isBuffering: false, playbackError: null });
-    } else if (isNativeAudioAvailable()) {
-      nativeAudio.resume().catch(() => {});
-      set({ isPlaying: true, isBuffering: false, playbackError: null });
-    } else if (audio) {
-      const currentRate = playbackRate || 1.0;
-      audio.volume = isMuted ? 0 : volume;
-      audio.muted = isMuted;
-      audio.playbackRate = currentRate;
-      audio.defaultPlaybackRate = currentRate;
-      (audio as any).preservesPitch = true;
-      (audio as any).webkitPreservesPitch = true;
-      (audio as any).mozPreservesPitch = true;
-      const playPromise = audio.play();
-      if (playPromise !== undefined) {
-        playPromise
-          .then(() => {
-            if (audio) {
-              audio.playbackRate = currentRate;
-            }
-            set({ isPlaying: true, isBuffering: false, playbackError: null });
-          })
-          .catch((err) => {
-            console.warn('[MusicWave Player] Audio resume error:', err);
-            set({ isPlaying: false, isBuffering: false });
-          });
+    } else {
+      if (typeof window !== 'undefined' && window.__musicwave_yt_pause) {
+        try {
+          window.__musicwave_yt_pause();
+        } catch (e) {}
+      }
+      if (isNativeAudioAvailable()) {
+        try {
+          nativeAudio.resume().catch(() => {});
+        } catch (e) {}
+      }
+      if (audio) {
+        const currentRate = playbackRate || 1.0;
+        audio.volume = isMuted ? 0 : volume;
+        audio.muted = isMuted;
+        audio.playbackRate = currentRate;
+        audio.defaultPlaybackRate = currentRate;
+        (audio as any).preservesPitch = true;
+        (audio as any).webkitPreservesPitch = true;
+        (audio as any).mozPreservesPitch = true;
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => {
+              if (audio) {
+                audio.playbackRate = currentRate;
+              }
+              set({ isPlaying: true, isBuffering: false, playbackError: null });
+            })
+            .catch((err) => {
+              console.warn('[MusicWave Player] Audio resume error:', err);
+              set({ isPlaying: false, isBuffering: false });
+            });
+        }
       }
     }
   },

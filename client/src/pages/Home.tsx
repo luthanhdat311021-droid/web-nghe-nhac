@@ -30,7 +30,7 @@ export const Home: React.FC = () => {
   const playSong = usePlayerStore((s) => s.playSong);
   const togglePlay = usePlayerStore((s) => s.togglePlay);
 
-  // TanStack Query caching hooks with initialData for instant 0ms first render
+  // TanStack Query caching hooks
   const { data: trendingSongs = [], isLoading: isTrendingLoading } = useQuery<Song[]>({
     queryKey: QUERY_KEYS.trendingSongs,
     queryFn: async () => {
@@ -38,9 +38,7 @@ export const Home: React.FC = () => {
       useFavoriteStore.getState().syncLikedStatus(data);
       return data;
     },
-    initialData: INITIAL_TRENDING_SONGS,
     placeholderData: (prev) => prev,
-    staleTime: 1000 * 60 * 5, // 5 minutes
   });
 
   const { data: recommendedSongs = [], isLoading: isRecommendedLoading } = useQuery<Song[]>({
@@ -50,9 +48,7 @@ export const Home: React.FC = () => {
       useFavoriteStore.getState().syncLikedStatus(data);
       return data;
     },
-    initialData: INITIAL_RECOMMENDED_SONGS,
     placeholderData: (prev) => prev,
-    staleTime: 1000 * 60 * 5,
   });
 
   const { data: topCharts = [], isLoading: isChartsLoading } = useQuery<Song[]>({
@@ -62,9 +58,7 @@ export const Home: React.FC = () => {
       useFavoriteStore.getState().syncLikedStatus(data);
       return data;
     },
-    initialData: INITIAL_TOP_CHARTS,
     placeholderData: (prev) => prev,
-    staleTime: 1000 * 60 * 5,
   });
 
   const { data: popularArtists = [], isLoading: isArtistsLoading } = useQuery<Artist[]>({
@@ -73,9 +67,7 @@ export const Home: React.FC = () => {
       const res = await artistService.getAllArtists({ limit: 6 });
       return res.items;
     },
-    initialData: INITIAL_ARTISTS.slice(0, 6),
     placeholderData: (prev) => prev,
-    staleTime: 1000 * 60 * 15, // 15 minutes
   });
 
   const { data: popularAlbums = [], isLoading: isAlbumsLoading } = useQuery<Album[]>({
@@ -84,9 +76,7 @@ export const Home: React.FC = () => {
       const res = await albumService.getAllAlbums({ limit: 6 });
       return res.items;
     },
-    initialData: INITIAL_ALBUMS.slice(0, 6),
     placeholderData: (prev) => prev,
-    staleTime: 1000 * 60 * 15, // 15 minutes
   });
 
   // Time-based greeting (Good morning / afternoon / evening)

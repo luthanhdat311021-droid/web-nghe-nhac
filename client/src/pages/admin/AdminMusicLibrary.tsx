@@ -40,6 +40,7 @@ import { Button } from '../../components/common/Button.js';
 import { SongModal } from '../../components/admin/SongModal.js';
 import { ReplaceAudioModal } from '../../components/admin/ReplaceAudioModal.js';
 import { ReplaceCoverModal } from '../../components/admin/ReplaceCoverModal.js';
+import { queryClient } from '../../services/queryClient.js';
 
 type TabType = 'library' | 'upload' | 'history';
 
@@ -182,6 +183,9 @@ export const AdminMusicLibrary: React.FC = () => {
       await adminService.deleteSong(deleteConfirmSong.id);
       setDeleteConfirmSong(null);
       fetchSongs();
+      queryClient.invalidateQueries({ queryKey: ['songs'] });
+      queryClient.invalidateQueries({ queryKey: ['artists'] });
+      queryClient.invalidateQueries({ queryKey: ['albums'] });
     } catch (e) {
       console.error(e);
     } finally {
@@ -458,6 +462,11 @@ export const AdminMusicLibrary: React.FC = () => {
     });
     setIsBatchUploading(false);
     setBatchCompleted(true);
+    fetchGenresAndArtists();
+    queryClient.invalidateQueries({ queryKey: ['artists'] });
+    queryClient.invalidateQueries({ queryKey: ['songs'] });
+    queryClient.invalidateQueries({ queryKey: ['albums'] });
+    queryClient.invalidateQueries({ queryKey: ['genres'] });
   };
 
   const handleRetryFailedItem = async (index: number) => {
@@ -1464,6 +1473,9 @@ export const AdminMusicLibrary: React.FC = () => {
           fetchSongs();
           setIsSongModalOpen(false);
           setEditingSong(null);
+          queryClient.invalidateQueries({ queryKey: ['songs'] });
+          queryClient.invalidateQueries({ queryKey: ['artists'] });
+          queryClient.invalidateQueries({ queryKey: ['albums'] });
         }}
         song={editingSong}
       />
@@ -1476,6 +1488,7 @@ export const AdminMusicLibrary: React.FC = () => {
         onSuccess={() => {
           fetchSongs();
           setReplaceAudioSong(null);
+          queryClient.invalidateQueries({ queryKey: ['songs'] });
         }}
       />
 
@@ -1487,6 +1500,9 @@ export const AdminMusicLibrary: React.FC = () => {
         onSuccess={() => {
           fetchSongs();
           setReplaceCoverSong(null);
+          queryClient.invalidateQueries({ queryKey: ['songs'] });
+          queryClient.invalidateQueries({ queryKey: ['artists'] });
+          queryClient.invalidateQueries({ queryKey: ['albums'] });
         }}
       />
 

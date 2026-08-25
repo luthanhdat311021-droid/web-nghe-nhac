@@ -2,7 +2,7 @@ import api from './api.js';
 import { ApiResponse, Artist, PaginatedResult } from '../types/index.js';
 
 export const artistService = {
-  async getAllArtists(params?: { search?: string; page?: number; limit?: number }, signal?: AbortSignal) {
+  async getAllArtists(params?: { search?: string; sort?: string; page?: number; limit?: number }, signal?: AbortSignal) {
     const res = await api.get<ApiResponse<PaginatedResult<Artist>>>('/artists', { params, signal });
     return res.data.data;
   },
