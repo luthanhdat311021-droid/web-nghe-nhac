@@ -75,8 +75,8 @@ export const Topbar: React.FC = () => {
         <div className="h-13 sm:h-14 md:h-16 flex items-center justify-between gap-3">
           {/* Mobile Brand (Visible only on mobile) */}
           <Link to="/" className="flex md:hidden items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-white text-black flex items-center justify-center shadow">
-              <Radio className="w-3.5 h-3.5" />
+            <div className="w-7 h-7 rounded-lg overflow-hidden shadow ring-1 ring-white/15 flex-shrink-0">
+              <img src="/logo.png" alt="MusicWave" className="w-full h-full object-cover" />
             </div>
             <span className="font-extrabold text-sm text-white tracking-tight">
               MusicWave

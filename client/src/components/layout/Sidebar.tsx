@@ -68,8 +68,8 @@ export const Sidebar: React.FC = () => {
         {/* Brand Logo */}
         <div className="p-5 pb-3">
           <Link to="/" className="flex items-center gap-2.5 group">
-            <div className="w-8 h-8 rounded-xl bg-white text-black flex items-center justify-center shadow">
-              <Radio className="w-4 h-4" />
+            <div className="w-8 h-8 rounded-xl overflow-hidden shadow ring-1 ring-white/15 group-hover:scale-105 transition-transform flex-shrink-0">
+              <img src="/logo.png" alt="MusicWave" className="w-full h-full object-cover" />
             </div>
             <div>
               <span className="font-extrabold text-base tracking-tight text-white">
