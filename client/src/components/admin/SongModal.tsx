@@ -419,6 +419,11 @@ export const SongModal: React.FC<SongModalProps> = ({
         if (ytId) formData.append('youtubeId', ytId);
         formData.append('audioUrl', youtubeUrl.trim());
       } else if (sourceType === 'upload') {
+        if (audioFile && audioFile.size > 4.5 * 1024 * 1024) {
+          alert(`File audio "${audioFile.name}" (${(audioFile.size / 1024 / 1024).toFixed(1)}MB) vượt quá giới hạn 4.5MB của serverless. Vui lòng nén file hoặc dùng tab YouTube URL.`);
+          setLoading(false);
+          return;
+        }
         if (audioFile) {
           formData.append('audioFile', audioFile);
         } else if (audioUrl) {
@@ -429,6 +434,11 @@ export const SongModal: React.FC<SongModalProps> = ({
       }
 
       if (coverType === 'upload' && coverFile) {
+        if (coverFile.size > 3 * 1024 * 1024) {
+          alert('File ảnh bìa không được vượt quá 3MB.');
+          setLoading(false);
+          return;
+        }
         formData.append('coverFile', coverFile);
       } else if (coverUrl.trim()) {
         formData.append('coverUrl', coverUrl.trim());
@@ -451,7 +461,18 @@ export const SongModal: React.FC<SongModalProps> = ({
       onSuccess();
       onClose();
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to save song');
+      console.error('[Admin SongModal error]', err);
+      let msg = 'Failed to save song';
+      if (err.response?.status === 413) {
+        msg = 'File tải lên vượt quá giới hạn 4.5MB của máy chủ serverless. Vui lòng nén file hoặc dùng tab YouTube.';
+      } else if (err.response?.data?.message) {
+        msg = err.response.data.message;
+      } else if (typeof err.response?.data === 'string' && err.response.data.includes('FUNCTION_PAYLOAD_TOO_LARGE')) {
+        msg = 'File tải lên vượt quá giới hạn 4.5MB của serverless.';
+      } else if (err.message) {
+        msg = err.message;
+      }
+      alert(msg);
     } finally {
       setLoading(false);
     }

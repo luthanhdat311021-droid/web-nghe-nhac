@@ -13,5 +13,6 @@ export const sendError = (res: Response, message: string = 'Internal Server Erro
     success: false,
     message,
     errors,
+    data: errors || null,
   });
 };

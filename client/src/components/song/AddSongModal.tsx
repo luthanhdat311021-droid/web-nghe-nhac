@@ -350,8 +350,11 @@ export const AddSongModal: React.FC<AddSongModalProps> = ({
   const handleAudioFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 50 * 1024 * 1024) {
-        setErrorMessage('File âm thanh không được vượt quá 50MB.');
+      if (file.size > 4.5 * 1024 * 1024) {
+        setErrorMessage(
+          `File âm thanh "${file.name}" (${(file.size / (1024 * 1024)).toFixed(1)}MB) vượt quá giới hạn 4.5MB của máy chủ serverless. Bạn vui lòng nén file < 4MB hoặc chuyển sang tab "YouTube URL" để phát nhạc chất lượng cao không giới hạn dung lượng!`
+        );
+        setAudioFile(null);
         return;
       }
       setAudioFile(file);
@@ -377,8 +380,8 @@ export const AddSongModal: React.FC<AddSongModalProps> = ({
   const handleCoverFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 10 * 1024 * 1024) {
-        setErrorMessage('File ảnh bìa không được vượt quá 10MB.');
+      if (file.size > 3 * 1024 * 1024) {
+        setErrorMessage('File ảnh bìa không được vượt quá 3MB.');
         return;
       }
       setCoverFile(file);
@@ -438,6 +441,13 @@ export const AddSongModal: React.FC<AddSongModalProps> = ({
           setLoading(false);
           return;
         }
+        if (audioFile && audioFile.size > 4.5 * 1024 * 1024) {
+          setErrorMessage(
+            `File âm thanh "${audioFile.name}" (${(audioFile.size / (1024 * 1024)).toFixed(1)}MB) vượt quá giới hạn 4.5MB của máy chủ serverless. Bạn vui lòng nén file hoặc dùng tab "YouTube URL" để thêm nhạc không giới hạn dung lượng.`
+          );
+          setLoading(false);
+          return;
+        }
         if (audioFile) {
           formData.append('audioFile', audioFile);
         }
@@ -451,6 +461,11 @@ export const AddSongModal: React.FC<AddSongModalProps> = ({
       }
 
       if (coverType === 'upload' && coverFile) {
+        if (coverFile.size > 3 * 1024 * 1024) {
+          setErrorMessage('File ảnh bìa không được vượt quá 3MB.');
+          setLoading(false);
+          return;
+        }
         formData.append('coverFile', coverFile);
       } else if (coverUrl.trim()) {
         formData.append('coverUrl', coverUrl.trim());
@@ -471,10 +486,47 @@ export const AddSongModal: React.FC<AddSongModalProps> = ({
       onSuccess(savedSong);
       onClose();
     } catch (err: any) {
-      const msg = err.response?.data?.message || 'Có lỗi xảy ra khi lưu bài hát.';
+      console.error('[AddSongModal error]', err);
+      let msg = 'Có lỗi xảy ra khi lưu bài hát.';
+
+      if (err.response?.status === 413) {
+        msg = 'Dung lượng file tải lên quá lớn (vượt quá giới hạn 4.5MB của serverless). Vui lòng chọn file nhẹ hơn hoặc dùng tab "YouTube URL" để thêm nhạc không giới hạn.';
+      } else if (err.response?.status === 401) {
+        msg = 'Phiên đăng nhập đã hết hạn hoặc bạn chưa đăng nhập. Vui lòng đăng nhập lại.';
+      } else if (err.response?.status === 403) {
+        msg = err.response?.data?.message || 'Bạn không có quyền thực hiện thao tác này.';
+      } else if (err.response?.status === 409) {
+        msg = err.response?.data?.message || 'Bài hát này của nghệ sĩ đã có trên hệ thống.';
+        const existing = err.response?.data?.data?.existingSong || err.response?.data?.errors?.existingSong;
+        if (existing) {
+          setDuplicateSong(existing);
+        }
+      } else if (err.response?.status === 429) {
+        msg = err.response?.data?.message || 'Bạn đang thao tác quá nhanh. Vui lòng đợi trong giây lát.';
+      } else if (err.response?.data?.message) {
+        msg = err.response.data.message;
+      } else if (err.response?.data?.error) {
+        msg = typeof err.response.data.error === 'string' ? err.response.data.error : JSON.stringify(err.response.data.error);
+      } else if (typeof err.response?.data === 'string' && err.response.data.trim()) {
+        const text = err.response.data;
+        if (text.includes('FUNCTION_PAYLOAD_TOO_LARGE') || text.includes('Entity Too Large')) {
+          msg = 'File tải lên vượt quá giới hạn dung lượng 4.5MB. Vui lòng nén file hoặc dùng tab "YouTube URL" để phát nhạc.';
+        } else if (text.length < 150) {
+          msg = text;
+        } else {
+          msg = 'Máy chủ phản hồi lỗi. Vui lòng thử lại sau hoặc chuyển sang tab "YouTube URL".';
+        }
+      } else if (err.message) {
+        if (err.message.includes('Network Error') || err.code === 'ERR_NETWORK') {
+          msg = 'Lỗi kết nối mạng hoặc file tải lên quá lớn vượt giới hạn server (4.5MB). Vui lòng dùng tab "YouTube URL" để thêm nhạc ổn định nhất!';
+        } else {
+          msg = err.message;
+        }
+      }
+
       setErrorMessage(msg);
-      if (err.response?.status === 409 && err.response?.data?.data?.existingSong) {
-        setDuplicateSong(err.response.data.data.existingSong);
+      if (err.response?.status === 409 && (err.response?.data?.data?.existingSong || err.response?.data?.errors?.existingSong)) {
+        setDuplicateSong(err.response.data.data?.existingSong || err.response.data.errors?.existingSong);
       }
     } finally {
       setLoading(false);
@@ -765,6 +817,9 @@ export const AddSongModal: React.FC<AddSongModalProps> = ({
               >
                 <Youtube className="w-3.5 h-3.5 text-red-500" />
                 <span>YouTube URL</span>
+                <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-red-500/20 text-red-400 border border-red-500/30">
+                  Khuyên dùng
+                </span>
               </button>
 
               <button
@@ -790,7 +845,7 @@ export const AddSongModal: React.FC<AddSongModalProps> = ({
                 }`}
               >
                 <FileAudio className="w-3.5 h-3.5" />
-                <span>Tải lên file MP3</span>
+                <span>Tải lên file MP3 (&lt; 4.5MB)</span>
               </button>
             </div>
 
@@ -826,32 +881,52 @@ export const AddSongModal: React.FC<AddSongModalProps> = ({
                     <span>{ytFeedback}</span>
                   </p>
                 )}
+                <p className="text-[11px] text-text-muted px-1">
+                  💡 Nhập link YouTube và bấm <span className="text-white font-medium">Tự điền</span> để tự động nhận diện tên bài hát, nghệ sĩ, ảnh bìa và thời lượng mà không lo giới hạn dung lượng file!
+                </p>
               </div>
             )}
 
             {/* Direct URL Input Mode */}
             {sourceType === 'url' && (
-              <Input
-                placeholder="https://example.com/audio.mp3"
-                value={audioUrl}
-                onChange={(e) => setAudioUrl(e.target.value)}
-              />
+              <div className="space-y-1">
+                <Input
+                  placeholder="https://example.com/audio.mp3"
+                  value={audioUrl}
+                  onChange={(e) => setAudioUrl(e.target.value)}
+                />
+                <p className="text-[11px] text-text-muted px-1">
+                  Đường dẫn trực tiếp đến file âm thanh công khai (MP3, WAV, M4A...).
+                </p>
+              </div>
             )}
 
             {/* File Upload Input Mode */}
             {sourceType === 'upload' && (
-              <div className="border border-dashed border-white/20 hover:border-white/40 rounded-xl p-4 text-center cursor-pointer transition-colors relative bg-white/[0.02]">
-                <input
-                  type="file"
-                  accept="audio/mp3,audio/wav,audio/ogg,audio/m4a,audio/*"
-                  onChange={handleAudioFileChange}
-                  className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                />
-                <FileAudio className="w-6 h-6 text-text-muted mx-auto mb-1.5" />
-                <p className="text-xs text-white font-medium">
-                  {audioFile ? audioFile.name : 'Chọn file âm thanh từ máy tính (MP3, WAV, OGG, M4A)'}
-                </p>
-                <p className="text-[11px] text-text-muted mt-0.5">Tối đa 50MB</p>
+              <div className="space-y-1.5">
+                <div className="border border-dashed border-white/20 hover:border-white/40 rounded-xl p-4 text-center cursor-pointer transition-colors relative bg-white/[0.02]">
+                  <input
+                    type="file"
+                    accept="audio/mp3,audio/wav,audio/ogg,audio/m4a,audio/*"
+                    onChange={handleAudioFileChange}
+                    className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                  />
+                  <FileAudio className="w-6 h-6 text-text-muted mx-auto mb-1.5" />
+                  <p className="text-xs text-white font-medium">
+                    {audioFile ? audioFile.name : 'Chọn file âm thanh từ máy tính (MP3, WAV, OGG, M4A)'}
+                  </p>
+                  <p className="text-[11px] text-text-muted mt-0.5">Tối đa 4.5MB (Giới hạn serverless)</p>
+                </div>
+                <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-300 flex items-center justify-between gap-2">
+                  <span>💡 Bạn có bài hát dung lượng lớn hơn 4.5MB? Hãy dùng tab <strong>YouTube URL</strong> để thêm nhạc chất lượng cao không giới hạn!</span>
+                  <button
+                    type="button"
+                    onClick={() => setSourceType('youtube')}
+                    className="px-2 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 font-semibold whitespace-nowrap"
+                  >
+                    Dùng YouTube →
+                  </button>
+                </div>
               </div>
             )}
           </div>
