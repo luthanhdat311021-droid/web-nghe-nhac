@@ -9,9 +9,7 @@ const INSECURE_DEFAULT_JWT = 'musicwave_super_secret_jwt_key_2026_modern_streami
 const jwtSecret = process.env.JWT_SECRET || INSECURE_DEFAULT_JWT;
 
 if (isProd && (!process.env.JWT_SECRET || process.env.JWT_SECRET === INSECURE_DEFAULT_JWT)) {
-  console.warn(
-    '⚠️ [SECURITY NOTICE] JWT_SECRET is not configured in Vercel Environment Variables. Using fallback key. Please add JWT_SECRET in Vercel Dashboard for production security.'
-  );
+  throw new Error('JWT_SECRET must be configured with a private random value in production.');
 }
 
 // Allowed CORS origins

@@ -8,6 +8,7 @@ import { validateSafeUrl } from '../utils/ssrfGuard.js';
 import { SecurityLogger } from '../utils/securityLogger.js';
 import { appCache } from '../utils/cacheManager.js';
 import { invalidateUserAuthCache } from '../middleware/auth.js';
+import { analyticsWindow, buildDailyAnalytics, DailyMetric } from '../services/dashboardAnalytics.js';
 import {
   uploadPublicMedia,
   uploadBuffer,
@@ -22,32 +23,34 @@ export const getDashboardStats = async (_req: AuthenticatedRequest, res: Respons
     const stats = await appCache.getOrSet(
       'admin:dashboard:stats',
       async () => {
+        const { start, end } = analyticsWindow();
         const [
           totalUsers,
           totalSongs,
           totalArtists,
           totalAlbums,
           totalPlaylists,
-          totalPlaysResult,
-          topSongs,
+          totalPlays,
+          topPlayCounts,
           recentUsers,
           genresDistribution,
+          revenueTotal,
+          dailyPlays,
+          dailyUsers,
+          dailyRevenue,
         ] = await Promise.all([
           prisma.user.count(),
           prisma.song.count(),
           prisma.artist.count(),
           prisma.album.count(),
           prisma.playlist.count(),
-          prisma.song.aggregate({
-            _sum: { playsCount: true },
-          }),
-          prisma.song.findMany({
+          prisma.playbackSession.count({ where: { consumedAt: { not: null, lte: end } } }),
+          prisma.playbackSession.groupBy({
+            by: ['songId'],
+            where: { consumedAt: { not: null, lte: end } },
             take: 5,
-            orderBy: { playsCount: 'desc' },
-            include: {
-              artist: { select: { name: true } },
-              album: { select: { title: true } },
-            },
+            orderBy: { _count: { songId: 'desc' } },
+            _count: { songId: true },
           }),
           prisma.user.findMany({
             take: 5,
@@ -60,26 +63,36 @@ export const getDashboardStats = async (_req: AuthenticatedRequest, res: Respons
               _count: { select: { songs: true } },
             },
           }),
+          prisma.paymentOrder.aggregate({ where: { status: 'PAID', transactionId: { not: null }, paidAt: { not: null, lte: end } }, _sum: { amount: true } }),
+          prisma.$queryRaw<DailyMetric[]>`SELECT to_char("consumedAt" + interval '7 hours', 'YYYY-MM-DD') AS day, count(*)::int AS value
+            FROM playback_sessions WHERE "consumedAt" >= ${start} AND "consumedAt" <= ${end} GROUP BY 1`,
+          prisma.$queryRaw<DailyMetric[]>`SELECT to_char("createdAt" + interval '7 hours', 'YYYY-MM-DD') AS day, count(*)::int AS value
+            FROM users WHERE "createdAt" >= ${start} AND "createdAt" <= ${end} GROUP BY 1`,
+          prisma.$queryRaw<DailyMetric[]>`SELECT to_char("paidAt" + interval '7 hours', 'YYYY-MM-DD') AS day, sum(amount)::float8 AS value
+            FROM payment_orders WHERE status = 'PAID' AND "transactionId" IS NOT NULL AND "paidAt" >= ${start} AND "paidAt" <= ${end} GROUP BY 1`,
         ]);
 
-        const chartData = [
-          { name: 'Mon', plays: 1240, newUsers: 14 },
-          { name: 'Tue', plays: 1980, newUsers: 22 },
-          { name: 'Wed', plays: 2450, newUsers: 30 },
-          { name: 'Thu', plays: 3120, newUsers: 28 },
-          { name: 'Fri', plays: 4890, newUsers: 45 },
-          { name: 'Sat', plays: 5800, newUsers: 56 },
-          { name: 'Sun', plays: 4670, newUsers: 40 },
-        ];
+        const chartData = buildDailyAnalytics(start, dailyPlays, dailyUsers, dailyRevenue);
+        const rankedSongs = await prisma.song.findMany({
+          where: { id: { in: topPlayCounts.map(row => row.songId) } },
+          include: { artist: { select: { name: true } }, album: { select: { title: true } } },
+        });
+        const topSongs = topPlayCounts.flatMap(row => {
+          const song = rankedSongs.find(song => song.id === row.songId);
+          return song ? [{ ...song, playsCount: row._count.songId }] : [];
+        });
 
         return {
+          generatedAt: end.toISOString(),
+          timezone: 'Asia/Ho_Chi_Minh',
           kpi: {
             totalUsers,
             totalSongs,
             totalArtists,
             totalAlbums,
             totalPlaylists,
-            totalPlays: totalPlaysResult._sum.playsCount || 0,
+            totalPlays,
+            totalRevenue: revenueTotal._sum.amount || 0,
           },
           chartData,
           topSongs,
@@ -94,6 +107,7 @@ export const getDashboardStats = async (_req: AuthenticatedRequest, res: Respons
       30 // Cache for 30s
     );
 
+    res.setHeader('Cache-Control', 'private, no-store');
     return sendSuccess(res, stats);
   } catch (error: any) {
     return sendError(res, error.message || 'Failed to fetch admin stats', 500);

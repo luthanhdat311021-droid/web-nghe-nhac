@@ -1,3 +1,5 @@
+import { MusicPro } from './pages/MusicPro.js';
+import { PlaybackAd } from './components/player/PlaybackAd.js';
 import React, { useEffect, Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './store/authStore.js';
@@ -45,10 +47,12 @@ const AdminLoader: React.FC = () => (
 import { prefetchAllCoreData } from './services/prefetch.js';
 
 export const App: React.FC = () => {
-  const { fetchMe, token } = useAuthStore();
+  const { fetchMe, token, user } = useAuthStore();
   const { initAudio } = usePlayerStore();
 
   useEffect(() => {
+    usePlayerStore.getState().cancelPendingPlayback();
+    usePlayerStore.setState({ currentSong: null, queue: [], queueIndex: -1 });
     initAudio();
     prefetchAllCoreData(Boolean(token));
     if (token) {
@@ -60,6 +64,7 @@ export const App: React.FC = () => {
     <BrowserRouter>
       <YouTubeAudioBridge />
       <LogoutConfirmModal />
+      <PlaybackAd />
       <Routes>
         {/* Main Client Shell - Instant 0ms switching */}
         <Route path="/" element={<MainLayout />}>
@@ -75,10 +80,11 @@ export const App: React.FC = () => {
           <Route path="library" element={<Library />} />
           <Route path="favorites" element={<Favorites />} />
           <Route path="history" element={<History />} />
+          <Route path="music-pro" element={<MusicPro />} />
           <Route path="profile" element={<Profile />} />
-          <Route path="contributions" element={<Contributions />} />
-          <Route path="add-song" element={<Contributions />} />
-          <Route path="add-artist" element={<Contributions />} />
+          <Route path="contributions" element={user?.role === 'ADMIN' ? <Contributions /> : <Navigate to="/music-pro" replace />} />
+          <Route path="add-song" element={user?.role === 'ADMIN' ? <Contributions /> : <Navigate to="/music-pro" replace />} />
+          <Route path="add-artist" element={user?.role === 'ADMIN' ? <Contributions /> : <Navigate to="/music-pro" replace />} />
           <Route path="login" element={<Login />} />
           <Route path="register" element={<Register />} />
           <Route path="forgot-password" element={<ForgotPassword />} />

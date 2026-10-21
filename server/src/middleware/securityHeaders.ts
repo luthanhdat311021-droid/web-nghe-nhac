@@ -46,7 +46,7 @@ export const securityHeaders = (req: Request, res: Response, next: NextFunction)
     "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.youtube.com https://s.ytimg.com",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com data:",
-    "img-src 'self' data: blob: https://images.unsplash.com https://img.youtube.com https://i.ytimg.com https://api.dicebear.com https://*.supabase.co",
+    "img-src 'self' data: blob: https://images.unsplash.com https://img.youtube.com https://i.ytimg.com https://api.dicebear.com https://*.supabase.co https://vietqr.app https://qr.sepay.vn",
     "media-src 'self' blob: data: https://*.youtube.com https://*.googlevideo.com https://*.supabase.co https://*.cloudinary.com https://*.scdn.co",
     "connect-src 'self' https://generativelanguage.googleapis.com https://*.supabase.co https://www.youtube.com",
     "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com",

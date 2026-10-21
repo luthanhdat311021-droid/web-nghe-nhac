@@ -221,12 +221,12 @@ export const Topbar: React.FC = () => {
                       </Link>
 
                       <Link
-                        to="/contributions"
+                        to="/music-pro"
                         onClick={() => setShowProfileMenu(false)}
                         className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-text-secondary hover:text-white hover:bg-white/10 rounded-xl transition-colors"
                       >
                         <Music2 className="w-4 h-4" />
-                        Đóng góp của tôi
+                        Music Pro
                       </Link>
 
                       {user.role === 'ADMIN' && (

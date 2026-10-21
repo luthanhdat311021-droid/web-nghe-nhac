@@ -19,7 +19,9 @@ export const generateToken = (payload: UserPayload): string => {
 };
 
 export const verifyToken = (token: string): UserPayload => {
-  return jwt.verify(token, config.jwt.secret) as UserPayload;
+  const payload = jwt.verify(token, config.jwt.secret) as UserPayload & { purpose?: string; type?: string };
+  if (payload.purpose || payload.type || !payload.userId || !payload.email || !payload.username) throw new Error('Invalid access token');
+  return payload;
 };
 
 export interface ResetTokenPayload {

@@ -152,6 +152,8 @@ export interface HistoryItem {
 }
 
 export interface DashboardStats {
+  generatedAt: string;
+  timezone: string;
   kpi: {
     totalUsers: number;
     totalSongs: number;
@@ -159,11 +161,14 @@ export interface DashboardStats {
     totalAlbums: number;
     totalPlaylists: number;
     totalPlays: number;
+    totalRevenue: number;
   };
   chartData: Array<{
     name: string;
+    date: string;
     plays: number;
     newUsers: number;
+    revenue: number;
   }>;
   topSongs: Song[];
   recentUsers: User[];

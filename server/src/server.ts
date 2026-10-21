@@ -1,3 +1,4 @@
+import { hidePlaybackSources, requireMediaTicket } from './middleware/playbackAccess.js';
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import path from 'path';
@@ -14,6 +15,7 @@ import { appCache } from './utils/cacheManager.js';
 import { playbackBuffer } from './services/playbackBuffer.js';
 import { jobQueue } from './services/jobQueue.js';
 import { prisma } from './services/prisma.js';
+import { stripInlineMedia } from './utils/inlineMedia.js';
 
 const app = express();
 
@@ -119,9 +121,10 @@ const uploadsPath = process.env.VERCEL
 
 app.use(
   '/uploads',
+  (req, res, next) => /\.(mp3|wav|ogg|m4a|aac|flac|webm|mp4)$/i.test(req.path) ? requireMediaTicket(req, res, next) : next(),
   express.static(uploadsPath, {
     dotfiles: 'ignore',       // Never serve hidden files (.env, .git, etc.)
-    maxAge: '1d',             // Cache for 1 day
+    maxAge: 0,             // Cache for 1 day
     setHeaders: (res) => {
       res.setHeader('X-Content-Type-Options', 'nosniff');
       res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
@@ -187,6 +190,13 @@ app.use((req: Request, res: Response, next: NextFunction) => {
     // 60s max-age in browser / WebView, 5 mins stale-while-revalidate
     res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
   }
+  next();
+});
+
+// 11b. Never ship inline base64 media (data: URIs) inside JSON — replace with streaming URLs
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const originalJson = res.json.bind(res);
+  res.json = (body?: any) => originalJson(stripInlineMedia(res.locals.allowPlaybackSource || (req as any).user?.role === 'ADMIN' ? body : hidePlaybackSources(body), `${req.protocol}://${req.get('host')}`));
   next();
 });
 

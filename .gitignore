@@ -51,3 +51,4 @@ server/prisma/*.db
 
 .vercel
 .env*
+!.env.example

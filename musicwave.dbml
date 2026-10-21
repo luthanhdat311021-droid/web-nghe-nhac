@@ -1,0 +1,200 @@
+// MusicWave (SoundVibe) - ERD for dbdiagram.io
+// Generated from prisma/schema.prisma
+
+Table users {
+  id uuid [pk]
+  username text [unique, not null]
+  email text [unique, not null]
+  passwordHash text [not null]
+  avatarUrl text
+  bio text
+  role text [not null, default: 'USER', note: 'USER | ADMIN']
+  isBlocked boolean [not null, default: false]
+  createdAt timestamp [not null, default: `now()`]
+  updatedAt timestamp [not null]
+}
+
+Table artists {
+  id uuid [pk]
+  name text [unique, not null]
+  avatarUrl text [not null]
+  bannerUrl text
+  biography text
+  verified boolean [not null, default: false]
+  country text
+  monthlyListeners int [not null, default: 0]
+  createdBy uuid
+  createdAt timestamp [not null, default: `now()`]
+  updatedAt timestamp [not null]
+}
+
+Table albums {
+  id uuid [pk]
+  title text [not null]
+  coverUrl text [not null]
+  releaseDate timestamp [not null, default: `now()`]
+  description text
+  artistId uuid [not null]
+  genreId uuid
+  createdAt timestamp [not null, default: `now()`]
+  updatedAt timestamp [not null]
+}
+
+Table genres {
+  id uuid [pk]
+  name text [unique, not null]
+  slug text [unique, not null]
+  coverUrl text
+  color text [not null, default: '#8b5cf6']
+  createdAt timestamp [not null, default: `now()`]
+}
+
+Table songs {
+  id uuid [pk]
+  title text [not null]
+  artistId uuid [not null]
+  albumId uuid
+  genreId uuid
+  duration int [not null, note: 'seconds']
+  audioUrl text [not null]
+  coverUrl text [not null]
+  sourceType text [not null, default: 'url', note: 'url | youtube | upload']
+  youtubeUrl text
+  youtubeId text
+  playsCount int [not null, default: 0]
+  releaseDate timestamp [not null, default: `now()`]
+  isTrending boolean [not null, default: false]
+  isFeatured boolean [not null, default: false]
+  createdBy uuid
+  createdAt timestamp [not null, default: `now()`]
+  updatedAt timestamp [not null]
+}
+
+Table lyrics {
+  id uuid [pk]
+  songId uuid [unique, not null]
+  plainLyrics text [not null]
+  syncedLyrics text [note: 'LRC or JSON {time, text}']
+  isSynced boolean [not null, default: false]
+  createdAt timestamp [not null, default: `now()`]
+  updatedAt timestamp [not null]
+}
+
+Table playlists {
+  id uuid [pk]
+  title text [not null]
+  description text
+  coverUrl text
+  isPublic boolean [not null, default: true]
+  userId uuid [not null]
+  createdAt timestamp [not null, default: `now()`]
+  updatedAt timestamp [not null]
+}
+
+Table playlist_songs {
+  id uuid [pk]
+  playlistId uuid [not null]
+  songId uuid [not null]
+  position int [not null, default: 0]
+  addedAt timestamp [not null, default: `now()`]
+
+  indexes {
+    (playlistId, songId) [unique]
+  }
+}
+
+Table favorites {
+  id uuid [pk]
+  userId uuid [not null]
+  songId uuid [not null]
+  createdAt timestamp [not null, default: `now()`]
+
+  indexes {
+    (userId, songId) [unique]
+  }
+}
+
+Table recently_played {
+  id uuid [pk]
+  userId uuid [not null]
+  songId uuid [not null]
+  playedAt timestamp [not null, default: `now()`]
+  durationPlayed int [not null, default: 0]
+}
+
+Table followers {
+  id uuid [pk]
+  userId uuid [not null]
+  artistId uuid [not null]
+  createdAt timestamp [not null, default: `now()`]
+
+  indexes {
+    (userId, artistId) [unique]
+  }
+}
+
+Table notifications {
+  id uuid [pk]
+  userId uuid [not null]
+  title text [not null]
+  message text [not null]
+  isRead boolean [not null, default: false]
+  createdAt timestamp [not null, default: `now()`]
+}
+
+Table password_reset_otps {
+  id uuid [pk]
+  userId uuid [not null]
+  otpHash text [not null]
+  expiresAt timestamp [not null]
+  attempts int [not null, default: 0]
+  usedAt timestamp
+  createdAt timestamp [not null, default: `now()`]
+}
+
+Table import_batches {
+  id uuid [pk]
+  totalFiles int [not null]
+  successCount int [not null]
+  failedCount int [not null]
+  createdBy uuid [note: 'logical reference to users.id (no FK)']
+  createdAt timestamp [not null, default: `now()`]
+}
+
+Table import_item_logs {
+  id uuid [pk]
+  batchId uuid [not null]
+  filename text [not null]
+  songTitle text
+  artistName text
+  status text [not null, note: 'SUCCESS | FAILED | SKIPPED']
+  errorMessage text
+  songId uuid [note: 'logical reference to songs.id (no FK)']
+  createdAt timestamp [not null, default: `now()`]
+}
+
+// ---------- Relationships ( > : many-to-one, - : one-to-one ) ----------
+Ref: artists.createdBy > users.id [delete: set null]
+Ref: songs.createdBy > users.id [delete: set null]
+Ref: playlists.userId > users.id [delete: cascade]
+Ref: favorites.userId > users.id [delete: cascade]
+Ref: recently_played.userId > users.id [delete: cascade]
+Ref: followers.userId > users.id [delete: cascade]
+Ref: notifications.userId > users.id [delete: cascade]
+Ref: password_reset_otps.userId > users.id [delete: cascade]
+
+Ref: albums.artistId > artists.id [delete: cascade]
+Ref: songs.artistId > artists.id [delete: cascade]
+Ref: followers.artistId > artists.id [delete: cascade]
+
+Ref: songs.albumId > albums.id [delete: set null]
+Ref: songs.genreId > genres.id [delete: set null]
+Ref: albums.genreId > genres.id [delete: set null]
+
+Ref: lyrics.songId - songs.id [delete: cascade]
+Ref: playlist_songs.songId > songs.id [delete: cascade]
+Ref: favorites.songId > songs.id [delete: cascade]
+Ref: recently_played.songId > songs.id [delete: cascade]
+Ref: playlist_songs.playlistId > playlists.id [delete: cascade]
+
+Ref: import_item_logs.batchId > import_batches.id [delete: cascade]

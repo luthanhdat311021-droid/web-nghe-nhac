@@ -14,7 +14,7 @@ import { QUERY_KEYS, queryClient } from '../services/queryClient.js';
 import { INITIAL_ARTISTS } from '../data/initialCatalog';
 
 export const Artists: React.FC = () => {
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const isAuthenticated = useAuthStore((s) => s.user?.role === 'ADMIN');
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<'popular' | 'latest' | 'az'>('popular');
   const [page, setPage] = useState(1);
@@ -23,12 +23,14 @@ export const Artists: React.FC = () => {
   const [isAddArtistOpen, setIsAddArtistOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
+  // 'popular' is the server's default order; omit it so the default view reuses the prefetched cache entry
+  const sortParam = sortBy === 'popular' ? undefined : sortBy;
   const { data: artistsData, isLoading } = useQuery({
-    queryKey: QUERY_KEYS.allArtists({ search: search.trim() || undefined, sort: sortBy, page, limit: 18 }),
+    queryKey: QUERY_KEYS.allArtists({ search: search.trim() || undefined, sort: sortParam, page, limit: 18 }),
     queryFn: () =>
       artistService.getAllArtists({
         search: search.trim() || undefined,
-        sort: sortBy,
+        sort: sortParam,
         page,
         limit: 18,
       }),
@@ -92,7 +94,7 @@ export const Artists: React.FC = () => {
             />
           </div>
 
-          <Button
+          {isAuthenticated && (<Button
             onClick={handleAddArtistClick}
             variant="primary"
             size="md"
@@ -100,7 +102,7 @@ export const Artists: React.FC = () => {
             className="flex-shrink-0"
           >
             + Thêm nghệ sĩ
-          </Button>
+          </Button>)}
         </div>
       </div>
 

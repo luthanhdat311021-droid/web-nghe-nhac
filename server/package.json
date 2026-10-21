@@ -12,7 +12,9 @@
     "db:migrate": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
-    "test:load": "tsx src/scripts/loadTest.ts"
+    "test:load": "tsx src/scripts/loadTest.ts",
+    "test:music-pro": "tsx --test src/scripts/musicPro.test.ts",
+    "test:dashboard": "tsx --test src/scripts/dashboardAnalytics.test.ts"
   },
 
   "dependencies": {

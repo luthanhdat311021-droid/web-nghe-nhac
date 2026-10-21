@@ -97,12 +97,12 @@ export const Profile: React.FC = () => {
 
           <div className="flex items-center justify-center md:justify-start gap-2 pt-2 flex-wrap">
             <Button
-              onClick={() => navigate('/contributions')}
+              onClick={() => navigate('/music-pro')}
               variant="primary"
               size="sm"
               leftIcon={<Music2 className="w-3.5 h-3.5" />}
             >
-              Đóng góp của tôi
+              Music Pro
             </Button>
 
             <Button
@@ -124,20 +124,20 @@ export const Profile: React.FC = () => {
             <Music2 className="w-6 h-6" />
           </div>
           <div>
-            <h3 className="font-bold text-white text-sm">Trung tâm Đóng góp của bạn</h3>
+            <h3 className="font-bold text-white text-sm">Music Pro — 50.000đ / 30 ngày</h3>
             <p className="text-xs text-text-muted mt-0.5">
-              Thêm bài hát mới, tạo nghệ sĩ và quản lý các nội dung bạn đã đóng góp cho MusicWave.
+              Nghe nhạc không giới hạn và không có quảng cáo của MusicWave.
             </p>
           </div>
         </div>
 
         <Button
-          onClick={() => navigate('/contributions')}
+          onClick={() => navigate('/music-pro')}
           variant="secondary"
           size="sm"
           className="whitespace-nowrap w-full sm:w-auto justify-center"
         >
-          Quản lý đóng góp →
+          Xem gói Music Pro →
         </Button>
       </div>
 

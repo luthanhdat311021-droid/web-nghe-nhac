@@ -153,9 +153,9 @@ export const Sidebar: React.FC = () => {
               <span>Album</span>
             </NavLink>
             {isAuthenticated && (
-              <NavLink to="/contributions" className={navItemClass}>
+              <NavLink to="/music-pro" className={navItemClass}>
                 <Music2 className="w-4 h-4 text-text-secondary" />
-                <span>Đóng góp của tôi</span>
+                <span>Music Pro</span>
               </NavLink>
             )}
           </div>

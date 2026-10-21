@@ -22,6 +22,11 @@ model User {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
+  proExpiresAt DateTime?
+  paymentOrders PaymentOrder[]
+  dailyUsage DailyUsage[]
+  playbackSessions PlaybackSession[]
+
   playlists      Playlist[]
   favorites      Favorite[]
   recentlyPlayed RecentlyPlayed[]
@@ -290,3 +295,38 @@ model ImportItemLog {
 }
 
 
+
+model PaymentOrder {
+  id String @id @default(uuid())
+  userId String
+  code String @unique
+  amount Int @default(50000)
+  status String @default("PENDING")
+  transactionId String? @unique
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  paidAt DateTime?
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, createdAt])
+  @@map("payment_orders")
+}
+model DailyUsage {
+  userId String
+  day String
+  count Int @default(0)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@id([userId, day])
+  @@map("daily_usage")
+}
+model PlaybackSession {
+  id String @id @default(uuid())
+  userId String
+  songId String
+  adRequired Boolean @default(false)
+  readyAt DateTime
+  expiresAt DateTime
+  consumedAt DateTime?
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, expiresAt])
+  @@map("playback_sessions")
+}

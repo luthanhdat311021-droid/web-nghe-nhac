@@ -213,10 +213,12 @@ export const YouTubeAudioBridge: React.FC = () => {
                 }
                 // 0 = ENDED
                 else if (event.data === 0) {
+                    usePlayerStore.setState({ isPlaying: false, playbackValidUntil: 0 });
                   const { repeatMode, nextSong } = usePlayerStore.getState();
                   if (repeatMode === 'one') {
-                    event.target.seekTo(0, true);
-                    event.target.playVideo();
+                    const song = usePlayerStore.getState().currentSong;
+                    usePlayerStore.setState({ currentSong: null, isPlaying: false });
+                    if (song) usePlayerStore.getState().playSong(song);
                   } else {
                     nextSong();
                   }

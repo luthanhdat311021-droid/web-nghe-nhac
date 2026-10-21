@@ -16,7 +16,7 @@ import { QUERY_KEYS, queryClient } from '../services/queryClient.js';
 import { INITIAL_GENRES, INITIAL_TRENDING_SONGS } from '../data/initialCatalog';
 
 export const Explore: React.FC = () => {
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const isAuthenticated = useAuthStore((s) => s.user?.role === 'ADMIN');
   const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
   const [page, setPage] = useState(1);
 
@@ -34,7 +34,8 @@ export const Explore: React.FC = () => {
 
   // Fetch songs with TanStack Query
   const { data: songsData, isLoading } = useQuery({
-    queryKey: QUERY_KEYS.allSongs({ page, limit: 16, genre: selectedGenre }),
+    // genre must be undefined (not null) when unset so the key matches the one prefetched in services/prefetch.ts
+    queryKey: QUERY_KEYS.allSongs({ page, limit: 16, genre: selectedGenre || undefined }),
     queryFn: async () => {
       const res = await songService.getAllSongs({
         page,
@@ -77,7 +78,7 @@ export const Explore: React.FC = () => {
           </p>
         </div>
 
-        <Button
+        {isAuthenticated && (<Button
           onClick={handleAddSongClick}
           variant="primary"
           size="md"
@@ -85,7 +86,7 @@ export const Explore: React.FC = () => {
           className="self-start sm:self-auto flex-shrink-0"
         >
           + Thêm bài hát
-        </Button>
+        </Button>)}
       </div>
 
       {/* Genre Filter Chips */}

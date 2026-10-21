@@ -40,7 +40,7 @@ export class CacheManager {
     this.defaultTtlMs = defaultTtlSeconds * 1000;
 
     // Periodic cleanup every 60s
-    setInterval(() => this.cleanupExpired(), 60000);
+    setInterval(() => this.cleanupExpired(), 60000).unref();
   }
 
   /**

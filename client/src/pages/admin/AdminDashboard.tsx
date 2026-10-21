@@ -8,6 +8,7 @@ import {
   TrendingUp,
   UserPlus,
   ShieldCheck,
+  Wallet,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -24,25 +25,43 @@ import { adminService } from '../../services/admin.service.js';
 import { StatsCard } from '../../components/admin/StatsCard.js';
 import { formatNumber, formatDate } from '../../utils/format.js';
 
+const formatVnd = (value: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(value);
+
 export const AdminDashboard: React.FC = () => {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    adminService
-      .getStats()
-      .then(setStats)
-      .catch(console.error)
-      .finally(() => setLoading(false));
+    let active = true;
+    let pending = false;
+    const refresh = async () => {
+      if (pending) return;
+      pending = true;
+      try {
+        const data = await adminService.getStats();
+        if (active) { setStats(data); setError(''); }
+      } catch {
+        if (active) setError('Không tải được số liệu mới. Vui lòng thử lại.');
+      } finally {
+        pending = false;
+        if (active) setLoading(false);
+      }
+    };
+    refresh();
+    const timer = setInterval(refresh, 30000);
+    window.addEventListener('focus', refresh);
+    return () => { active = false; clearInterval(timer); window.removeEventListener('focus', refresh); };
   }, []);
 
-  if (loading || !stats) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
         <div className="w-8 h-8 rounded-full border-2 border-amber-400 border-t-transparent animate-spin" />
       </div>
     );
   }
+  if (!stats) return <div role="alert" className="p-6 space-y-4"><p>{error}</p><button onClick={() => window.location.reload()} className="text-amber-300">Thử lại</button></div>;
 
   return (
     <div className="space-y-6 sm:space-y-8 max-w-7xl mx-auto overflow-x-hidden">
@@ -53,17 +72,18 @@ export const AdminDashboard: React.FC = () => {
           <span>System Overview & Analytics</span>
         </h1>
         <p className="text-xs sm:text-sm text-text-secondary mt-0.5">
-          Live streaming telemetry, catalogue volume, and user activity
+          Dữ liệu thực từ hệ thống • Giờ Việt Nam • Cập nhật mỗi 30 giây
         </p>
+        <p className="text-xs text-text-muted mt-1">Cập nhật lúc {new Date(stats.generatedAt).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</p>
+        {error && <p role="alert" className="text-amber-300 text-sm mt-2">{error} Đang hiển thị số liệu lần cập nhật trước.</p>}
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
         <StatsCard
           title="Total Users"
           value={formatNumber(stats.kpi.totalUsers)}
           icon={<Users className="w-4 h-4 sm:w-5 sm:h-5 text-text-secondary" />}
-          trend="+12% this week"
         />
         <StatsCard
           title="Total Songs"
@@ -86,23 +106,23 @@ export const AdminDashboard: React.FC = () => {
           icon={<ListMusic className="w-4 h-4 sm:w-5 sm:h-5 text-text-secondary" />}
         />
         <StatsCard
-          title="Total Plays"
+          title="Lượt phát ghi nhận"
           value={formatNumber(stats.kpi.totalPlays)}
           icon={<Play className="w-4 h-4 sm:w-5 sm:h-5 text-text-secondary" />}
-          trend="+28% streams"
         />
+        <StatsCard title="Tổng doanh thu" value={formatVnd(stats.kpi.totalRevenue)} icon={<Wallet className="w-5 h-5 text-emerald-400" />} />
       </div>
 
       {/* Analytics Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 sm:gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 sm:gap-6">
         {/* Plays Trend Chart */}
         <div className="p-4 sm:p-6 rounded-3xl bg-background-card border border-white/5 shadow-xl space-y-4 min-w-0 w-full overflow-hidden">
           <div className="flex items-center justify-between">
             <h3 className="font-bold text-white text-sm sm:text-base flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-primary-400" />
-              Weekly Streams Volume
+              Lượt phát nhạc
             </h3>
-            <span className="text-[11px] sm:text-xs text-text-muted">Last 7 Days</span>
+            <span className="text-[11px] sm:text-xs text-text-muted">7 ngày gần nhất</span>
           </div>
 
           <div className="h-56 sm:h-64 w-full min-w-0">
@@ -115,7 +135,7 @@ export const AdminDashboard: React.FC = () => {
                   </linearGradient>
                 </defs>
                 <XAxis dataKey="name" stroke="#64748b" fontSize={11} tickLine={false} />
-                <YAxis stroke="#64748b" fontSize={11} tickLine={false} />
+                <YAxis allowDecimals={false} stroke="#64748b" fontSize={11} tickLine={false} />
                 <Tooltip
                   contentStyle={{
                     backgroundColor: '#12141c',
@@ -128,6 +148,7 @@ export const AdminDashboard: React.FC = () => {
                 <Area
                   type="monotone"
                   dataKey="plays"
+                  name="Lượt phát"
                   stroke="#8b5cf6"
                   strokeWidth={3}
                   fillOpacity={1}
@@ -143,16 +164,16 @@ export const AdminDashboard: React.FC = () => {
           <div className="flex items-center justify-between">
             <h3 className="font-bold text-white text-sm sm:text-base flex items-center gap-2">
               <UserPlus className="w-4 h-4 text-text-secondary" />
-              New User Registrations
+              Đăng ký mới
             </h3>
-            <span className="text-[11px] sm:text-xs text-text-muted">Last 7 Days</span>
+            <span className="text-[11px] sm:text-xs text-text-muted">7 ngày gần nhất</span>
           </div>
 
           <div className="h-56 sm:h-64 w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={stats.chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <XAxis dataKey="name" stroke="#64748b" fontSize={11} tickLine={false} />
-                <YAxis stroke="#64748b" fontSize={11} tickLine={false} />
+                <YAxis allowDecimals={false} stroke="#64748b" fontSize={11} tickLine={false} />
                 <Tooltip
                   contentStyle={{
                     backgroundColor: '#12141c',
@@ -162,12 +183,29 @@ export const AdminDashboard: React.FC = () => {
                     fontSize: '12px',
                   }}
                 />
-                <Bar dataKey="newUsers" fill="#ec4899" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="newUsers" name="Tài khoản mới" fill="#ec4899" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+        <div className="p-4 sm:p-6 rounded-3xl bg-background-card border border-white/5 shadow-xl space-y-4 min-w-0 w-full overflow-hidden">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="font-bold text-white text-sm sm:text-base flex items-center gap-2"><Wallet className="w-4 h-4 text-emerald-400" /> Doanh thu Music Pro</h3>
+            <span className="text-[11px] sm:text-xs text-text-muted">7 ngày gần nhất</span>
+          </div>
+          <div className="h-56 sm:h-64 w-full min-w-0">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={stats.chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                <XAxis dataKey="name" stroke="#64748b" fontSize={11} tickLine={false} />
+                <YAxis allowDecimals={false} stroke="#64748b" fontSize={11} tickLine={false} tickFormatter={value => new Intl.NumberFormat('vi-VN', { notation: 'compact' }).format(value)} />
+                <Tooltip formatter={(value: number) => [formatVnd(value), 'Doanh thu']} contentStyle={{ backgroundColor: '#12141c', borderColor: '#ffffff15', borderRadius: '12px', color: '#fff', fontSize: '12px' }} />
+                <Bar dataKey="revenue" name="Doanh thu" fill="#34d399" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
       </div>
+      <p className="text-xs text-text-muted">Lượt phát được ghi nhận từ khi triển khai Music Pro, không bao gồm bộ đếm mẫu trước đây. Doanh thu tính theo ngày giao dịch của đơn đã thanh toán qua SePay; không tính đơn chờ hoặc hết hạn. Ngày không có ghi nhận hiển thị 0.</p>
 
       {/* Lists Row: Top Songs & Recent Users */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 sm:gap-6">
@@ -178,6 +216,7 @@ export const AdminDashboard: React.FC = () => {
             Top Streamed Tracks
           </h3>
           <div className="space-y-2">
+            {stats.topSongs.length === 0 && <p className="text-sm text-text-muted py-4">Chưa có lượt phát được ghi nhận.</p>}
             {stats.topSongs.map((song, idx) => (
               <div
                 key={song.id}

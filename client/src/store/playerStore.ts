@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { Song } from '../types/index.js';
-import { songService } from '../services/song.service.js';
+import api from '../services/api.js';
 import { isYouTubeSource, getSongYoutubeId } from '../utils/youtube.js';
 import { getMediaUrl } from '../utils/media.js';
 import { isNativeAudioAvailable, nativeAudio } from '../services/nativeAudio.js';
@@ -10,6 +10,10 @@ type RepeatMode = 'off' | 'all' | 'one';
 let playbackRequestId = 0;
 
 interface PlayerState {
+  adSeconds: number;
+  isAuthorizing: boolean;
+  playbackValidUntil: number;
+  cancelPendingPlayback: () => void;
   audio: HTMLAudioElement | null;
   currentSong: Song | null;
   isPlaying: boolean;
@@ -81,6 +85,14 @@ const getAudioElement = () => {
 };
 
 export const usePlayerStore = create<PlayerState>((set, get) => ({
+  adSeconds: 0,
+  isAuthorizing: false,
+  playbackValidUntil: 0,
+  cancelPendingPlayback: () => {
+    ++playbackRequestId;
+    get().pause();
+    set({ adSeconds: 0, isAuthorizing: false, isBuffering: false });
+  },
   audio: null,
   currentSong: null,
   isPlaying: false,
@@ -161,10 +173,12 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     };
 
     audio.onended = () => {
+      set({ isPlaying: false, currentTime: get().duration, playbackValidUntil: 0 });
       const { repeatMode, nextSong } = get();
       if (repeatMode === 'one') {
-        audio.currentTime = 0;
-        audio.play().catch(console.error);
+        const song = get().currentSong;
+        set({ currentSong: null });
+        if (song) get().playSong(song);
       } else {
         nextSong();
       }
@@ -181,7 +195,34 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     set({ audio });
   },
 
-  playSong: (song: Song, newQueue?: Song[]) => {
+  playSong: async (song: Song, newQueue?: Song[]) => {
+    if (get().currentSong?.id === song.id && !get().isAuthorizing && Date.now() < get().playbackValidUntil) {
+      if (!get().isPlaying) get().resume();
+      return;
+    }
+    const admissionId = ++playbackRequestId;
+    get().pause();
+    set({ isAuthorizing: true, isBuffering: true, playbackError: null, adSeconds: 0 });
+    try {
+      const prepared = (await api.post('/music-pro/playback/' + song.id + '/prepare')).data.data;
+      if (admissionId !== playbackRequestId) return;
+      const end = Date.now() + prepared.adSeconds * 1000;
+      while (Date.now() < end) {
+        set({ adSeconds: Math.ceil((end - Date.now()) / 1000) });
+        await new Promise(resolve => setTimeout(resolve, 250));
+        if (admissionId !== playbackRequestId) return;
+      }
+      set({ adSeconds: 0 });
+      const source = (await api.post('/music-pro/playback/' + prepared.sessionId + '/start')).data.data;
+      if (admissionId !== playbackRequestId) return;
+      song = { ...song, ...source };
+      set({ isAuthorizing: false, currentSong: null, playbackValidUntil: Date.now() + 2 * 3600000 });
+    } catch (error: any) {
+      if (admissionId !== playbackRequestId) return;
+      set({ isAuthorizing: false, isPlaying: false, isBuffering: false, adSeconds: 0,
+        playbackError: error.response?.status === 401 ? 'Vui lòng đăng nhập để nghe nhạc.' : error.response?.data?.message || 'Không thể bắt đầu phát nhạc. Vui lòng thử lại.' });
+      return;
+    }
     let audio = get().audio;
     if (!audio) {
       get().initAudio();
@@ -235,7 +276,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         window.__musicwave_yt_load_and_play(targetYtId, reqId);
       }
 
-      songService.recordPlay(song.id).catch(() => {});
+
     } else if (audio) {
       // Stop YouTube playback immediately
       if (typeof window !== 'undefined' && window.__musicwave_yt_stop) {
@@ -261,7 +302,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
               audio.playbackRate = currentRate;
             }
             set({ isPlaying: true, isBuffering: false, playbackError: null });
-            songService.recordPlay(song.id).catch(() => {});
+
           })
           .catch((err) => {
             console.warn('[MusicWave Player] Auto-play blocked or audio source error:', err);
@@ -321,6 +362,13 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   },
 
   resume: () => {
+    if (get().isAuthorizing) return;
+    if (get().currentSong && Date.now() >= get().playbackValidUntil) {
+      const song = get().currentSong!;
+      set({ currentSong: null });
+      get().playSong(song);
+      return;
+    }
     const domAudio = getAudioElement();
     const stateAudio = get().audio;
     const audio = stateAudio || domAudio;
