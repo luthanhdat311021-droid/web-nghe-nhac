@@ -79,7 +79,7 @@ const SongRowComponent: React.FC<SongRowProps> = ({
         onClick={handleRowClick}
         onKeyDown={handleKeyDown}
         aria-label={`${isCurrentPlaying ? 'Pause' : 'Play'} ${song.title} by ${song.artist?.name || 'Artist'}`}
-        className={`group flex items-center gap-2.5 sm:gap-3 px-2 py-1.5 sm:py-2 rounded-xl transition-colors duration-150 cursor-pointer select-none active:scale-[0.98] outline-none focus-visible:ring-1 focus-visible:ring-white/30 ${
+        className={`group flex items-center gap-2.5 sm:gap-3 px-2 py-1.5 sm:py-2 rounded-xl transition-colors duration-150 cursor-pointer select-none active:scale-[0.98] has-[button:active]:scale-100 has-[a:active]:scale-100 outline-none focus-visible:ring-1 focus-visible:ring-white/30 ${
           isCurrent
             ? 'bg-white/[0.08] border border-white/10'
             : 'hover:bg-white/[0.04] active:bg-white/[0.06] border border-transparent'

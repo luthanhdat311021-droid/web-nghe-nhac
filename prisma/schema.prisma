@@ -15,6 +15,7 @@ model User {
   username     String    @unique
   email        String    @unique
   passwordHash String
+  googleSubject String? @unique
   avatarUrl    String?
   bio          String?
   role         String    @default("USER") // USER | ADMIN
@@ -26,6 +27,10 @@ model User {
   paymentOrders PaymentOrder[]
   dailyUsage DailyUsage[]
   playbackSessions PlaybackSession[]
+  songRatings SongRating[]
+  hostedJamRooms JamRoom[]
+  jamMemberships JamMember[]
+  jamMessages JamMessage[]
 
   playlists      Playlist[]
   favorites      Favorite[]
@@ -128,6 +133,7 @@ model Song {
   playlistSongs  PlaylistSong[]
   favorites      Favorite[]
   recentlyPlayed RecentlyPlayed[]
+  ratings        SongRating[]
 
   @@index([artistId])
   @@index([albumId])
@@ -329,4 +335,59 @@ model PlaybackSession {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   @@index([userId, expiresAt])
   @@map("playback_sessions")
+}
+// One rating per user per song; only Music Pro accounts may write.
+model SongRating {
+  id String @id @default(uuid())
+  userId String
+  songId String
+  rating Int
+  comment String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  song Song @relation(fields: [songId], references: [id], onDelete: Cascade)
+  @@unique([userId, songId])
+  @@index([songId, updatedAt(sort: Desc)])
+  @@map("song_ratings")
+}
+// Listening rooms: the host's player state is mirrored to every member's player.
+model JamRoom {
+  id String @id @default(uuid())
+  code String @unique
+  hostId String
+  songId String?
+  positionSec Float @default(0)
+  isPlaying Boolean @default(false)
+  stateAt DateTime @default(now())
+  pendingSongIds String[] @default([])
+  createdAt DateTime @default(now())
+  endedAt DateTime?
+  host User @relation(fields: [hostId], references: [id], onDelete: Cascade)
+  members JamMember[]
+  messages JamMessage[]
+  @@index([hostId, endedAt])
+  @@map("jam_rooms")
+}
+model JamMember {
+  roomId String
+  userId String
+  joinedAt DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+  room JamRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@id([roomId, userId])
+  @@map("jam_members")
+}
+model JamMessage {
+  id String @id @default(uuid())
+  roomId String
+  userId String
+  kind String @default("chat") // chat | queue | sticker
+  text String
+  createdAt DateTime @default(now())
+  room JamRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([roomId, createdAt])
+  @@map("jam_messages")
 }

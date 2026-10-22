@@ -22,6 +22,7 @@ import { useFavoriteStore } from '../store/favoriteStore.js';
 import { formatDuration, formatDate } from '../utils/format.js';
 import { Button } from '../components/common/Button.js';
 import { SongRow } from '../components/cards/SongRow.js';
+import { SongRatings } from '../components/song/SongRatings.js';
 import { Modal } from '../components/common/Modal.js';
 import { HeaderHeroSkeleton, SongListSkeleton } from '../components/common/Skeleton.js';
 import { QUERY_KEYS } from '../services/queryClient.js';
@@ -237,6 +238,8 @@ export const SongDetail: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <SongRatings songId={song.id} />
 
       {/* More From Artist */}
       {song.moreFromArtist && song.moreFromArtist.length > 0 && (

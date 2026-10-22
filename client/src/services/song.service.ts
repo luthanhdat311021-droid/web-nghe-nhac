@@ -1,6 +1,25 @@
 import api from './api.js';
 import { ApiResponse, PaginatedResult, Song } from '../types/index.js';
 
+export interface SongRating {
+  id: string;
+  userId: string;
+  songId: string;
+  rating: number;
+  comment: string | null;
+  createdAt: string;
+  updatedAt: string;
+  user?: { id: string; username: string; avatarUrl: string | null };
+}
+
+export interface SongRatingSummary {
+  average: number;
+  count: number;
+  items: SongRating[];
+  myRating: SongRating | null;
+  canRate: boolean;
+}
+
 export const songService = {
   async getAllSongs(params?: {
     page?: number;
@@ -40,6 +59,21 @@ export const songService = {
       >
     >(`/songs/${id}`);
     return res.data.data;
+  },
+
+  async getRatings(id: string) {
+    const res = await api.get<ApiResponse<SongRatingSummary>>(`/songs/${id}/ratings`);
+    return res.data.data;
+  },
+
+  async rateSong(id: string, rating: number, comment?: string) {
+    const res = await api.put<ApiResponse<SongRating>>(`/songs/${id}/ratings`, { rating, comment });
+    return res.data.data;
+  },
+
+  async deleteRating(id: string) {
+    const res = await api.delete<ApiResponse<null>>(`/songs/${id}/ratings`);
+    return res.data;
   },
 
   async recordPlay(id: string, durationPlayed: number = 0) {

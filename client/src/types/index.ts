@@ -7,6 +7,7 @@ export interface User {
   role: 'USER' | 'ADMIN';
   isBlocked?: boolean;
   createdAt: string;
+  proExpiresAt?: string | null;
   _count?: {
     favorites: number;
     playlists: number;

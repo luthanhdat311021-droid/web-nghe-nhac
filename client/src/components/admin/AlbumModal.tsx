@@ -86,7 +86,7 @@ export const AlbumModal: React.FC<AlbumModalProps> = ({
       onSuccess();
       onClose();
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to save album');
+      alert(err.response?.data?.message || 'Không thể lưu album.');
     } finally {
       setLoading(false);
     }
@@ -96,7 +96,7 @@ export const AlbumModal: React.FC<AlbumModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={album ? 'Edit album' : 'Add album'}
+      title={album ? 'Sửa album' : 'Thêm album'}
       maxWidth="md"
     >
       <form onSubmit={handleSubmit} className="space-y-4 max-h-[75vh] overflow-y-auto pr-1">
@@ -165,10 +165,10 @@ export const AlbumModal: React.FC<AlbumModalProps> = ({
 
         <div className="flex justify-end gap-2 pt-3 border-t border-white/5">
           <Button type="button" variant="ghost" size="sm" onClick={onClose}>
-            Cancel
+            Hủy
           </Button>
           <Button type="submit" variant="primary" size="sm" isLoading={loading}>
-            Save album
+            Lưu album
           </Button>
         </div>
       </form>

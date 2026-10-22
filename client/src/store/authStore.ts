@@ -1,6 +1,14 @@
 import { create } from 'zustand';
 import { User } from '../types/index.js';
 import { authService } from '../services/auth.service.js';
+import { queryClient } from '../services/queryClient.js';
+import { useFavoriteStore } from './favoriteStore.js';
+
+const clearAccountCache = () => {
+  queryClient.clear();
+  localStorage.removeItem('musicwave_hot_query_cache_v2');
+  useFavoriteStore.setState({ likedMap: {}, isInitialized: false });
+};
 
 interface AuthState {
   user: User | null;
@@ -15,6 +23,7 @@ interface AuthState {
   closeLogoutModal: () => void;
   fetchMe: () => Promise<void>;
   updateUser: (user: User) => void;
+  acceptSession: (session: { user: User; token: string }) => void;
 }
 
 const getStoredToken = () => localStorage.getItem('musicwave_token');
@@ -36,14 +45,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   isAuthenticated: !!getStoredToken(),
   isLoading: false,
   isLogoutModalOpen: false,
+  acceptSession: ({ user, token }) => {
+    clearAccountCache();
+    localStorage.setItem('musicwave_token', token);
+    localStorage.setItem('musicwave_user', JSON.stringify(user));
+    set({ user, token, isAuthenticated: true, isLoading: false });
+  },
 
   login: async (credentials) => {
     set({ isLoading: true });
     try {
       const { user, token } = await authService.login(credentials);
-      localStorage.setItem('musicwave_token', token);
-      localStorage.setItem('musicwave_user', JSON.stringify(user));
-      set({ user, token, isAuthenticated: true, isLoading: false });
+      get().acceptSession({ user, token });
     } catch (error) {
       set({ isLoading: false });
       throw error;
@@ -54,9 +67,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true });
     try {
       const { user, token } = await authService.register(data);
-      localStorage.setItem('musicwave_token', token);
-      localStorage.setItem('musicwave_user', JSON.stringify(user));
-      set({ user, token, isAuthenticated: true, isLoading: false });
+      get().acceptSession({ user, token });
     } catch (error) {
       set({ isLoading: false });
       throw error;
@@ -72,6 +83,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   logout: () => {
+    clearAccountCache();
     localStorage.removeItem('musicwave_token');
     localStorage.removeItem('musicwave_user');
     set({ user: null, token: null, isAuthenticated: false, isLogoutModalOpen: false });

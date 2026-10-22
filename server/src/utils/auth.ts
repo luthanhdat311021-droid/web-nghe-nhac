@@ -1,4 +1,5 @@
 import bcrypt from 'bcrypt';
+import { createHash } from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import { config } from '../config/index.js';
 import { UserPayload } from '../types/index.js';
@@ -28,13 +29,17 @@ export interface ResetTokenPayload {
   type: 'PASSWORD_RESET';
   userId: string;
   email: string;
+  passwordVersion: string;
 }
 
-export const generateResetToken = (userId: string, email: string): string => {
+export const passwordVersion = (hash: string): string => createHash('sha256').update(hash).digest('hex');
+
+export const generateResetToken = (userId: string, email: string, passwordHash: string): string => {
   const payload: ResetTokenPayload = {
     type: 'PASSWORD_RESET',
     userId,
     email,
+    passwordVersion: passwordVersion(passwordHash),
   };
   return jwt.sign(payload, config.jwt.secret, {
     expiresIn: `${config.resetToken.expiresMinutes}m`,
@@ -43,7 +48,7 @@ export const generateResetToken = (userId: string, email: string): string => {
 
 export const verifyResetToken = (token: string): ResetTokenPayload => {
   const decoded = jwt.verify(token, config.jwt.secret) as ResetTokenPayload;
-  if (decoded.type !== 'PASSWORD_RESET') {
+  if (decoded.type !== 'PASSWORD_RESET' || !decoded.userId || !decoded.email || !decoded.passwordVersion) {
     throw new Error('Invalid token purpose');
   }
   return decoded;

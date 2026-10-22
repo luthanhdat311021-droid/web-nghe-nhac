@@ -14,6 +14,7 @@ import {
   AlertCircle,
   RotateCcw,
   RotateCw,
+  SlidersHorizontal,
 } from 'lucide-react';
 import {
   usePlayerStore,
@@ -30,6 +31,8 @@ import { VolumeControl } from './VolumeControl.js';
 import { LyricsModal } from './LyricsModal.js';
 import { QueueDrawer } from './QueueDrawer.js';
 import { FullScreenPlayer } from './FullScreenPlayer.js';
+import { AudioFxPanel } from './AudioFxPanel.js';
+import { useAudioFxStore } from '../../store/audioFxStore.js';
 import { Link } from 'react-router-dom';
 
 // Mini Progress Line isolated from BottomPlayer container re-renders
@@ -96,6 +99,8 @@ export const BottomPlayer: React.FC = () => {
   const toggleLyrics = usePlayerStore((s) => s.toggleLyrics);
   const toggleQueue = usePlayerStore((s) => s.toggleQueue);
   const openFullScreenPlayer = usePlayerStore((s) => s.openFullScreenPlayer);
+  const openFx = useAudioFxStore((s) => s.openPanel);
+  const fxEnabled = useAudioFxStore((s) => s.enabled);
 
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const isLiked = useFavoriteStore((s) => s.isLiked(currentSong?.id || '', currentSong?.isLiked || false));
@@ -386,6 +391,17 @@ export const BottomPlayer: React.FC = () => {
             </button>
 
             <button
+              onClick={openFx}
+              aria-label="Âm thanh Pro"
+              className={`p-1.5 rounded-lg transition-colors ${
+                fxEnabled ? 'text-amber-300 bg-white/10' : 'text-text-muted hover:text-white hover:bg-white/5'
+              }`}
+              title="Âm thanh Pro (EQ & chuyển bài mượt)"
+            >
+              <SlidersHorizontal className="w-4 h-4" />
+            </button>
+
+            <button
               onClick={toggleQueue}
               aria-label="Toggle Play Queue"
               className={`p-1.5 rounded-lg transition-colors ${
@@ -415,6 +431,7 @@ export const BottomPlayer: React.FC = () => {
       {/* Synchronized Lyrics Overlay & Queue Drawer Modals */}
       <LyricsModal />
       <QueueDrawer />
+      <AudioFxPanel />
     </>
   );
 };

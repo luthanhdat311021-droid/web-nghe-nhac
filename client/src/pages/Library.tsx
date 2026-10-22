@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Heart, History, ListMusic, Plus, Music2 } from 'lucide-react';
+import { Heart, History, ListMusic, Plus, Music2, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '../store/authStore.js';
@@ -107,6 +107,19 @@ export const Library: React.FC = () => {
           Tạo playlist
         </Button>
       </div>
+
+      <Link
+        to="/jam"
+        className="flex items-center gap-3 rounded-2xl border border-emerald-300/20 bg-gradient-to-r from-emerald-400/15 to-cyan-500/5 p-4 active:scale-[0.99] transition-transform"
+      >
+        <div className="w-10 h-10 rounded-xl bg-emerald-400 text-black flex items-center justify-center flex-shrink-0">
+          <Users className="w-5 h-5" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm font-bold text-white">Nghe chung</p>
+          <p className="text-xs text-text-muted truncate">Tạo phòng, nghe cùng bạn bè theo thời gian thực</p>
+        </div>
+      </Link>
 
       {/* Filter Chips */}
       <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1 -mx-3.5 px-3.5 sm:mx-0 sm:px-0">

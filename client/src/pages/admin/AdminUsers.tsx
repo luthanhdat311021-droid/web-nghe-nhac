@@ -28,7 +28,8 @@ export const AdminUsers: React.FC = () => {
 
   const handleRoleToggle = async (user: User) => {
     const newRole = user.role === 'ADMIN' ? 'USER' : 'ADMIN';
-    if (!window.confirm(`Đổi vai trò người dùng ${user.username} thành ${newRole}?`)) return;
+    const roleLabel = newRole === 'ADMIN' ? 'Quản trị viên' : 'Người dùng';
+    if (!window.confirm(`Đổi vai trò của ${user.username} thành ${roleLabel}?`)) return;
     try {
       await adminService.updateUserRole(user.id, newRole);
       fetchUsers();
@@ -113,7 +114,7 @@ export const AdminUsers: React.FC = () => {
                       onClick={() => handleRoleToggle(u)}
                       className="px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider bg-white/10 text-text-secondary hover:text-white"
                     >
-                      {u.role}
+                      {u.role === 'ADMIN' ? 'Quản trị viên' : 'Người dùng'}
                     </button>
                   </div>
                   <p className="text-[11px] text-text-muted truncate mt-0.5">{u.email}</p>
@@ -153,7 +154,7 @@ export const AdminUsers: React.FC = () => {
                 <th className="p-3.5">Người dùng</th>
                 <th className="p-3.5">Vai trò</th>
                 <th className="p-3.5">Trạng thái</th>
-                <th className="p-3.5">Playlists</th>
+                <th className="p-3.5">Danh sách phát</th>
                 <th className="p-3.5">Đã thích</th>
                 <th className="p-3.5">Ngày tham gia</th>
                 <th className="p-3.5 text-right">Thao tác</th>
@@ -198,7 +199,7 @@ export const AdminUsers: React.FC = () => {
                         className="px-2 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider bg-white/10 text-text-secondary hover:text-white"
                         title="Nhấn để đổi vai trò"
                       >
-                        {u.role}
+                        {u.role === 'ADMIN' ? 'Quản trị viên' : 'Người dùng'}
                       </button>
                     </td>
                     <td className="p-3.5">

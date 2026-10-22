@@ -97,7 +97,7 @@ export const ReplaceCoverModal: React.FC<ReplaceCoverModalProps> = ({
               Thay thế ảnh bìa
             </h3>
             <p className="text-xs text-text-muted mt-0.5 truncate max-w-xs">
-              {song.title} • {song.artist?.name || 'Various'}
+              {song.title} • {song.artist?.name || 'Nhiều nghệ sĩ'}
             </p>
           </div>
           <button
@@ -138,7 +138,7 @@ export const ReplaceCoverModal: React.FC<ReplaceCoverModalProps> = ({
             <div className="space-y-2">
               <img
                 src={previewUrl}
-                alt="New Cover Preview"
+                alt="Xem trước ảnh bìa mới"
                 className="w-28 h-28 mx-auto rounded-xl object-cover shadow-lg border border-white/10"
               />
               <p className="text-xs font-semibold text-white truncate max-w-xs mx-auto">

@@ -10,6 +10,7 @@ export const Profile: React.FC = () => {
   const navigate = useNavigate();
   const { user, updateUser, openLogoutModal } = useAuthStore();
   const [username, setUsername] = useState(user?.username || '');
+  const [email, setEmail] = useState(user?.email || '');
   const [avatarUrl, setAvatarUrl] = useState(user?.avatarUrl || '');
   const [bio, setBio] = useState(user?.bio || '');
   const [currentPassword, setCurrentPassword] = useState('');
@@ -18,6 +19,7 @@ export const Profile: React.FC = () => {
 
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileSuccess, setProfileSuccess] = useState(false);
+  const [profileError, setProfileError] = useState('');
   const [changingPassword, setChangingPassword] = useState(false);
   const [passwordSuccess, setPasswordSuccess] = useState(false);
   const [passwordError, setPasswordError] = useState('');
@@ -29,18 +31,22 @@ export const Profile: React.FC = () => {
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
+    setProfileError('');
+    setProfileSuccess(false);
     try {
       setSavingProfile(true);
       const updated = await authService.updateProfile({
         username: username.trim(),
+        email: email.trim().toLowerCase(),
         avatarUrl: avatarUrl.trim() || undefined,
         bio: bio.trim(),
       });
       updateUser(updated);
+      setEmail(updated.email);
       setProfileSuccess(true);
       setTimeout(() => setProfileSuccess(false), 3000);
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Không thể cập nhật hồ sơ.');
+      setProfileError(err.response?.data?.message || 'Không thể cập nhật hồ sơ.');
     } finally {
       setSavingProfile(false);
     }
@@ -157,6 +163,16 @@ export const Profile: React.FC = () => {
           </div>
 
           <form onSubmit={handleUpdateProfile} className="space-y-3">
+            <Input
+              label="Email"
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              maxLength={100}
+              required
+            />
+            {profileError && <p role="alert" className="text-xs text-red-400">{profileError}</p>}
             <Input
               label="Tên hiển thị"
               value={username}

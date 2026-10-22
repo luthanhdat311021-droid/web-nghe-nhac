@@ -17,7 +17,7 @@ export const authService = {
     return res.data.data;
   },
 
-  async updateProfile(data: { username?: string; bio?: string; avatarUrl?: string }) {
+  async updateProfile(data: { username?: string; email?: string; bio?: string; avatarUrl?: string }) {
     const res = await api.put<ApiResponse<User>>('/auth/profile', data);
     return res.data.data;
   },

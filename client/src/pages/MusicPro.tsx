@@ -13,7 +13,13 @@ export const MusicPro: React.FC = () => {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [now, setNow] = useState(Date.now());
-  const refresh = async () => { const res = await api.get('/music-pro/status'); setStatus(res.data.data); };
+  const refresh = async () => {
+    const res = await api.get('/music-pro/status');
+    setStatus(res.data.data);
+    const user = useAuthStore.getState().user;
+    // Keep the cached profile in step so Pro-only player features unlock without a reload.
+    if (user && user.proExpiresAt !== res.data.data.proExpiresAt) useAuthStore.getState().updateUser({ ...user, proExpiresAt: res.data.data.proExpiresAt });
+  };
   useEffect(() => {
     setStatus(null); setOrder(null); setError('');
     if (token) refresh().catch(() => setError('Không tải được thông tin gói. Vui lòng tải lại trang.'));
@@ -58,11 +64,12 @@ export const MusicPro: React.FC = () => {
         <p><strong className="text-3xl">50.000đ</strong><span className="text-text-muted"> / 30 ngày</span></p>
         <p className="flex gap-2"><Check className="text-emerald-300" /> Nghe nhạc không giới hạn</p>
         <p className="flex gap-2"><Check className="text-emerald-300" /> Không quảng cáo của MusicWave</p>
-        <p className="text-sm text-text-muted">Thanh toán một lần bằng QR chuyển khoản. Gia hạn cộng thêm 30 ngày vào thời hạn còn lại, không tự động trừ tiền.</p>
+        <p className="text-sm text-text-muted">Thanh toán một lần bằng QR chuyển khoản, không tự động trừ tiền. Có thể mua lại sau khi gói hết hạn.</p>
         {!token ? <Link to="/login" className="block rounded-xl bg-amber-300 text-black p-3 text-center font-bold">Đăng nhập để nâng cấp</Link> :
+          status?.isPro ? <p className="flex items-center justify-center gap-2 rounded-xl border border-emerald-300/40 bg-emerald-400/10 text-emerald-300 p-3 font-bold"><Check className="w-5 h-5" /> Bạn đang dùng Music Pro</p> :
           <button disabled={busy || !status?.paymentEnabled || (!!order && order.status === 'PENDING' && !expired)} onClick={createOrder}
-            className="w-full rounded-xl bg-amber-300 text-black p-3 font-bold disabled:opacity-50">{busy ? 'Đang tạo QR…' : status?.isPro ? 'Gia hạn 30 ngày' : 'Nâng cấp Music Pro'}</button>}
-        {status && !status.paymentEnabled && <p className="text-sm text-amber-200">Thanh toán đang được thiết lập.</p>}
+            className="w-full rounded-xl bg-amber-300 text-black p-3 font-bold disabled:opacity-50">{busy ? 'Đang tạo QR…' : 'Nâng cấp Music Pro'}</button>}
+        {status && !status.isPro && !status.paymentEnabled && <p className="text-sm text-amber-200">Thanh toán đang được thiết lập.</p>}
       </div>
     </div>
     {error && <p role="alert" className="text-red-300">{error}</p>}

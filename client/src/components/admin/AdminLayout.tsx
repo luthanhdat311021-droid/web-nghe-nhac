@@ -52,10 +52,10 @@ export const AdminLayout: React.FC = () => {
             </div>
             <div>
               <span className="font-extrabold text-base text-white">
-                Admin<span className="text-amber-400">Portal</span>
+                Quản trị <span className="text-amber-400">MusicWave</span>
               </span>
               <span className="block text-[10px] text-text-muted font-bold tracking-widest uppercase">
-                MusicWave Management
+                HỆ THỐNG QUẢN LÝ
               </span>
             </div>
           </div>
@@ -65,23 +65,23 @@ export const AdminLayout: React.FC = () => {
         <div className="flex-1 overflow-y-auto px-4 py-2 space-y-1.5 no-scrollbar">
           <NavLink to="/admin" end className={navClass}>
             <LayoutDashboard className="w-4 h-4" />
-            Dashboard
+            Tổng quan
           </NavLink>
           <NavLink to="/admin/library" className={navClass}>
             <Music2 className="w-4 h-4" />
-            Music Library
+            Thư viện nhạc
           </NavLink>
           <NavLink to="/admin/artists" className={navClass}>
             <Users className="w-4 h-4" />
-            Artists Management
+            Quản lý nghệ sĩ
           </NavLink>
           <NavLink to="/admin/albums" className={navClass}>
             <Disc className="w-4 h-4" />
-            Albums Management
+            Quản lý album
           </NavLink>
           <NavLink to="/admin/users" className={navClass}>
             <UserCheck className="w-4 h-4" />
-            Users & Roles
+            Người dùng & phân quyền
           </NavLink>
         </div>
 
@@ -92,7 +92,7 @@ export const AdminLayout: React.FC = () => {
             className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-bold text-white border border-white/10 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
-            Back to MusicWave App
+            Quay lại MusicWave
           </Link>
         </div>
       </aside>
@@ -106,7 +106,7 @@ export const AdminLayout: React.FC = () => {
             <Shield className="w-3.5 h-3.5" />
           </div>
           <span className="font-extrabold text-sm text-white">
-            Admin<span className="text-amber-400">Portal</span>
+            Quản trị <span className="text-amber-400">MusicWave</span>
           </span>
         </div>
 
@@ -116,7 +116,7 @@ export const AdminLayout: React.FC = () => {
             className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-semibold text-text-secondary hover:text-white flex items-center gap-1 border border-white/10"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
-            Client App
+            Trang nghe nhạc
           </Link>
         </div>
       </header>
@@ -141,23 +141,23 @@ export const AdminLayout: React.FC = () => {
       <nav className="md:hidden fixed left-0 right-0 bottom-0 z-40 bg-background-surface/95 backdrop-blur-2xl border-t border-white/10 flex items-center justify-around px-1 pt-1 pb-[calc(env(safe-area-inset-bottom)+0.35rem)] shadow-2xl select-none">
         <NavLink to="/admin" end className={mobileTabClass}>
           <LayoutDashboard className="w-4 h-4" />
-          <span>Stats</span>
+          <span>Tổng quan</span>
         </NavLink>
         <NavLink to="/admin/library" className={mobileTabClass}>
           <Music2 className="w-4 h-4" />
-          <span>Library</span>
+          <span>Thư viện</span>
         </NavLink>
         <NavLink to="/admin/artists" className={mobileTabClass}>
           <Users className="w-4 h-4" />
-          <span>Artists</span>
+          <span>Nghệ sĩ</span>
         </NavLink>
         <NavLink to="/admin/albums" className={mobileTabClass}>
           <Disc className="w-4 h-4" />
-          <span>Albums</span>
+          <span>Album</span>
         </NavLink>
         <NavLink to="/admin/users" className={mobileTabClass}>
           <UserCheck className="w-4 h-4" />
-          <span>Users</span>
+          <span>Người dùng</span>
         </NavLink>
       </nav>
     </div>

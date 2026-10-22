@@ -34,11 +34,14 @@ router.post('/orders', requireAuth, wrap(async (req, res) => {
   if (!process.env.SEPAY_WEBHOOK_KEY) return sendError(res, 'Thanh toán đang được thiết lập. Vui lòng quay lại sau.', 503);
   const order = await prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT id FROM users WHERE id = ${req.user!.userId} FOR UPDATE`;
+    const user = await tx.user.findUniqueOrThrow({ where: { id: req.user!.userId } });
+    if (isPro(user.proExpiresAt)) return null;
     const existing = await tx.paymentOrder.findFirst({ where: { userId: req.user!.userId, status: 'PENDING', expiresAt: { gt: new Date() } } });
     return existing || tx.paymentOrder.create({ data: { userId: req.user!.userId,
       code: `MW${randomBytes(12).toString('hex').toUpperCase()}`, amount: PRO_PRICE,
       expiresAt: new Date(Date.now() + 30 * 60000) } });
   });
+  if (!order) return sendError(res, 'Gói Music Pro của bạn vẫn đang hoạt động.', 400);
   return sendSuccess(res, presentOrder(order));
 }));
 router.get('/orders/:id', requireAuth, wrap(async (req, res) => {

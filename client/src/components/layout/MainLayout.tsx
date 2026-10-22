@@ -4,6 +4,7 @@ import { Sidebar } from './Sidebar.js';
 import { Topbar } from './Topbar.js';
 import { BottomPlayer } from '../player/BottomPlayer.js';
 import { MobileNav } from './MobileNav.js';
+import { JamSync } from '../jam/JamSync.js';
 import { usePlayerStore } from '../../store/playerStore.js';
 
 export const MainLayout: React.FC = () => {
@@ -21,7 +22,7 @@ export const MainLayout: React.FC = () => {
         <Topbar />
         
         <main
-          className={`flex-1 overflow-y-auto px-3.5 sm:px-6 md:px-8 py-4 sm:py-6 transition-all no-scrollbar ${
+          className={`flex-1 overflow-y-auto px-3.5 sm:px-6 md:px-8 pt-4 sm:pt-6 transition-all no-scrollbar ${
             hasCurrentSong
               ? 'pb-[calc(56px+68px+env(safe-area-inset-bottom)+1rem)] md:pb-28'
               : 'pb-[calc(56px+env(safe-area-inset-bottom)+1rem)] md:pb-8'
@@ -36,6 +37,9 @@ export const MainLayout: React.FC = () => {
 
       {/* Mobile Bottom Navigation */}
       <MobileNav />
+
+      {/* Jam room sync runs on every page while the user is in a room */}
+      <JamSync />
     </div>
   );
 };

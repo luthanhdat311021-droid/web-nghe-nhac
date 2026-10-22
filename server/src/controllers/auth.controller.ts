@@ -8,6 +8,7 @@ import {
   hashPassword,
   generateResetToken,
   verifyResetToken,
+  passwordVersion,
 } from '../utils/auth.js';
 import { sendError, sendSuccess } from '../utils/response.js';
 import { AuthenticatedRequest } from '../types/index.js';
@@ -26,7 +27,7 @@ const registerSchema = z.object({
     .min(3, 'Tên người dùng phải có ít nhất 3 ký tự')
     .max(30, 'Tên người dùng tối đa 30 ký tự')
     .regex(/^[a-zA-Z0-9_.-]+$/, 'Tên người dùng chỉ chứa chữ cái, số, dấu gạch dưới hoặc gạch nối'),
-  email: z.string().email('Địa chỉ email không hợp lệ').max(100),
+  email: z.string().trim().toLowerCase().email('Địa chỉ email không hợp lệ').max(100),
   password: z
     .string()
     .min(8, 'Mật khẩu phải có ít nhất 8 ký tự')
@@ -40,11 +41,15 @@ const loginSchema = z.object({
 });
 
 const updateProfileSchema = z.object({
+  email: z.string().trim().toLowerCase().email('Địa chỉ email không hợp lệ').max(100).optional(),
   username: z
     .string()
-    .min(3, 'Tên người dùng phải có ít nhất 3 ký tự')
-    .max(30, 'Tên người dùng tối đa 30 ký tự')
-    .regex(/^[a-zA-Z0-9_.-]+$/, 'Tên người dùng chỉ chứa chữ cái, số, dấu gạch dưới hoặc gạch nối')
+    .trim()
+    .transform((value) => value.normalize('NFC'))
+    .pipe(z.string()
+    .min(1, 'Vui lòng nhập tên hiển thị')
+    .max(30, 'Tên hiển thị tối đa 30 ký tự')
+    .regex(/^[\p{L}\p{M}\p{N} ._-]+$/u, 'Tên hiển thị chỉ chứa chữ cái, số, khoảng trắng, dấu chấm, gạch dưới hoặc gạch nối'))
     .optional(),
   bio: z.string().max(300, 'Tiểu sử tối đa 300 ký tự').optional(),
   avatarUrl: z.string().url('URL ảnh đại diện không hợp lệ').optional().or(z.string().length(0)),
@@ -210,6 +215,7 @@ export const login = async (req: Request, res: Response) => {
       bio: user.bio,
       role: user.role,
       createdAt: user.createdAt,
+      proExpiresAt: user.proExpiresAt,
     };
 
     SecurityLogger.log({
@@ -241,6 +247,7 @@ export const getMe = async (req: AuthenticatedRequest, res: Response) => {
         bio: true,
         role: true,
         createdAt: true,
+        proExpiresAt: true,
         _count: {
           select: {
             favorites: true,
@@ -264,7 +271,7 @@ export const getMe = async (req: AuthenticatedRequest, res: Response) => {
 export const updateProfile = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const validatedData = updateProfileSchema.parse(req.body);
-    const { username, bio, avatarUrl } = validatedData;
+    const { username, email, bio, avatarUrl } = validatedData;
     const userId = req.user!.userId;
 
     if (username) {
@@ -280,10 +287,19 @@ export const updateProfile = async (req: AuthenticatedRequest, res: Response) =>
       }
     }
 
+    if (email !== undefined) {
+      const existing = await prisma.user.findFirst({
+        where: { email: { equals: email, mode: 'insensitive' }, NOT: { id: userId } },
+        select: { id: true },
+      });
+      if (existing) return sendError(res, 'Địa chỉ email này đã được tài khoản khác sử dụng.', 400);
+    }
+
     const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: {
         ...(username ? { username: username.trim() } : {}),
+        ...(email !== undefined ? { email } : {}),
         ...(bio !== undefined ? { bio: bio ? String(bio).trim() : null } : {}),
         ...(avatarUrl !== undefined ? { avatarUrl: avatarUrl || null } : {}),
       },
@@ -302,6 +318,9 @@ export const updateProfile = async (req: AuthenticatedRequest, res: Response) =>
 
     return sendSuccess(res, updatedUser, 'Cập nhật thông tin cá nhân thành công.');
   } catch (error: any) {
+    if (error?.code === 'P2002') {
+      return sendError(res, 'Email hoặc tên người dùng đã được tài khoản khác sử dụng.', 400);
+    }
     if (error instanceof z.ZodError) {
       return sendError(res, error.errors[0]?.message || 'Dữ liệu không hợp lệ', 400, error.errors);
     }
@@ -367,11 +386,11 @@ export const changePassword = async (req: AuthenticatedRequest, res: Response) =
 // =========================================================================
 
 const forgotPasswordRequestSchema = z.object({
-  email: z.string().email('Địa chỉ email không hợp lệ').max(100),
+  email: z.string().trim().toLowerCase().email('Địa chỉ email không hợp lệ').max(100),
 });
 
 const verifyOtpSchema = z.object({
-  email: z.string().email('Địa chỉ email không hợp lệ').max(100),
+  email: z.string().trim().toLowerCase().email('Địa chỉ email không hợp lệ').max(100),
   otp: z
     .string()
     .length(6, 'Mã OTP phải gồm đúng 6 chữ số')
@@ -463,7 +482,7 @@ export const requestPasswordReset = async (req: Request, res: Response) => {
     const expiresAt = new Date(Date.now() + config.otp.expiresMinutes * 60 * 1000);
 
     // Save hashed OTP to database
-    await prisma.passwordResetOtp.create({
+    const createdOtp = await prisma.passwordResetOtp.create({
       data: {
         userId: user.id,
         otpHash,
@@ -471,11 +490,16 @@ export const requestPasswordReset = async (req: Request, res: Response) => {
       },
     });
 
-    // Dispatch OTP email (awaited to ensure reliable delivery on Vercel Serverless Functions)
+    // Await delivery in serverless environments; never report success on SMTP failure.
+    let delivered = false;
     try {
-      await emailService.sendPasswordResetOtp(user.email, rawOtp, user.username);
-    } catch (emailErr: any) {
-      console.error('Failed to send OTP email:', emailErr?.message || emailErr);
+      delivered = await emailService.sendPasswordResetOtp(user.email, rawOtp, user.username);
+    } catch {
+      delivered = false;
+    }
+    if (!delivered) {
+      await prisma.passwordResetOtp.deleteMany({ where: { id: createdOtp.id } });
+      return sendError(res, 'Chưa gửi được email xác thực. Vui lòng thử lại sau.', 503);
     }
 
     SecurityLogger.log({
@@ -581,49 +605,29 @@ export const verifyPasswordResetOtp = async (req: Request, res: Response) => {
       );
     }
 
-    // Verify OTP hash
-    const isMatch = await comparePassword(cleanOtp, otpRecord.otpHash);
-
-    if (!isMatch) {
-      const nextAttempt = otpRecord.attempts + 1;
-      await prisma.passwordResetOtp.update({
-        where: { id: otpRecord.id },
-        data: { attempts: nextAttempt },
-      });
-
-      const remainingAttempts = config.otp.maxAttempts - nextAttempt;
-
-      SecurityLogger.log({
-        type: 'AUTH_OTP_VERIFY_FAILURE',
-        ip: clientIp,
-        userId: user.id,
-        details: { attempts: nextAttempt, remainingAttempts },
-        requestId,
-      });
-
-      if (remainingAttempts <= 0) {
-        return sendError(
-          res,
-          'Mã xác thực không chính xác. Mã đã bị vô hiệu hóa do thử sai quá số lần cho phép.',
-          400
-        );
-      }
-
-      return sendError(
-        res,
-        `Mã xác thực không chính xác. Bạn còn ${remainingAttempts} lần thử.`,
-        400
-      );
+    // Reserve an attempt atomically before the expensive hash comparison.
+    const attempt = await prisma.passwordResetOtp.updateMany({
+      where: { id: otpRecord.id, usedAt: null, expiresAt: { gt: new Date() }, attempts: { lt: config.otp.maxAttempts } },
+      data: { attempts: { increment: 1 } },
+    });
+    if (attempt.count !== 1) {
+      return sendError(res, 'Mã xác thực đã hết hạn hoặc hết lượt thử. Vui lòng yêu cầu mã mới.', 400);
     }
-
-    // Mark OTP as used (Single-use enforcement)
-    await prisma.passwordResetOtp.update({
-      where: { id: otpRecord.id },
+    const isMatch = await comparePassword(cleanOtp, otpRecord.otpHash);
+    if (!isMatch) {
+      return sendError(res, 'Mã xác thực không chính xác. Mỗi mã có tối đa 5 lượt xác minh.', 400);
+    }
+    // Only one concurrent verification may consume this OTP.
+    const consumed = await prisma.passwordResetOtp.updateMany({
+      where: { id: otpRecord.id, usedAt: null, expiresAt: { gt: new Date() } },
       data: { usedAt: new Date() },
     });
+    if (consumed.count !== 1) {
+      return sendError(res, 'Mã xác thực đã được sử dụng hoặc hết hạn. Vui lòng yêu cầu mã mới.', 400);
+    }
 
     // Generate short-lived Password Reset Token (10 minutes)
-    const resetToken = generateResetToken(user.id, user.email);
+    const resetToken = generateResetToken(user.id, user.email, user.passwordHash);
 
     SecurityLogger.log({
       type: 'AUTH_OTP_VERIFY_SUCCESS',
@@ -683,13 +687,18 @@ export const resetPassword = async (req: Request, res: Response) => {
       return sendError(res, 'Tài khoản người dùng không tồn tại hoặc đã bị khóa.', 404);
     }
 
-    // Hash new password using bcrypt
+    if (decoded.email !== user.email || decoded.passwordVersion !== passwordVersion(user.passwordHash)) {
+      return sendError(res, 'Phiên đặt lại mật khẩu đã được sử dụng hoặc không còn hợp lệ. Vui lòng yêu cầu mã mới.', 401);
+    }
     const passwordHash = await hashPassword(newPassword);
-
-    await prisma.user.update({
-      where: { id: user.id },
+    // Compare-and-swap makes the reset token single-use, including concurrent requests.
+    const updated = await prisma.user.updateMany({
+      where: { id: user.id, email: decoded.email, passwordHash: user.passwordHash, isBlocked: false },
       data: { passwordHash },
     });
+    if (updated.count !== 1) {
+      return sendError(res, 'Phiên đặt lại mật khẩu không còn hợp lệ. Vui lòng yêu cầu mã mới.', 401);
+    }
 
     invalidateUserAuthCache(user.id);
 

@@ -61,7 +61,7 @@ const SongCardComponent: React.FC<SongCardProps> = ({ song, queueContext, classN
         onClick={handleCardClick}
         onKeyDown={handleKeyDown}
         aria-label={`${isCurrentPlaying ? 'Pause' : 'Play'} ${song.title} by ${song.artist?.name || 'Artist'}`}
-        className={`group relative rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.05] hover:border-white/[0.12] p-2.5 sm:p-3 transition-colors duration-150 cursor-pointer select-none active:scale-[0.98] outline-none focus-visible:ring-1 focus-visible:ring-white/30 ${className}`}
+        className={`group relative rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.05] hover:border-white/[0.12] p-2.5 sm:p-3 transition-colors duration-150 cursor-pointer select-none active:scale-[0.98] has-[button:active]:scale-100 outline-none focus-visible:ring-1 focus-visible:ring-white/30 ${className}`}
       >
         {/* Cover Artwork with Play Button */}
         <div className="relative aspect-square w-full rounded-lg overflow-hidden mb-2 bg-white/5 shadow-sm">

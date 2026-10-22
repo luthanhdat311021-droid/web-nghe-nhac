@@ -22,6 +22,7 @@ import { SongRowSkeleton, ArtistCardSkeleton, AlbumCardSkeleton } from '../compo
 import { useFavoriteStore } from '../store/favoriteStore.js';
 import { searchHistoryUtil } from '../utils/searchHistory.js';
 import { QUERY_KEYS } from '../services/queryClient.js';
+import { ClassifyGenresButton } from '../components/common/ClassifyGenresButton.js';
 
 type TabType = 'all' | 'songs' | 'artists' | 'albums' | 'playlists';
 type SortOption = 'relevance' | 'popular' | 'newest';
@@ -227,24 +228,24 @@ export const Search: React.FC = () => {
         <div className="space-y-6 pt-1">
           <div>
             <h2 className="text-base font-bold text-white mb-3">Khám phá thể loại</h2>
+            <ClassifyGenresButton />
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3">
               {displayResults.genres.map((g) => (
-                <div
+                <button
+                  type="button"
                   key={g.id}
                   onClick={() => {
-                    setQuery(g.name);
-                    setDebouncedQuery(g.name);
-                    setSearchParams({ q: g.name });
+                    navigate(`/explore?genre=${encodeURIComponent(g.slug)}`);
                   }}
-                  className="p-3.5 sm:p-4 rounded-xl cursor-pointer transition-all active:scale-[0.98] hover:bg-white/[0.08] border border-white/[0.06] relative overflow-hidden bg-white/[0.03]"
+                  className="text-left p-3.5 sm:p-4 rounded-xl cursor-pointer transition-all active:scale-[0.98] hover:bg-white/[0.08] border border-white/[0.06] relative overflow-hidden bg-white/[0.03]"
                 >
                   <div
                     className="w-1 h-full absolute left-0 top-0 opacity-70"
                     style={{ backgroundColor: g.color || '#8b5cf6' }}
                   />
                   <h3 className="font-bold text-sm text-white">{g.name}</h3>
-                  <p className="text-[11px] text-text-muted mt-0.5">Thể loại</p>
-                </div>
+                  <p className="text-[11px] text-text-muted mt-0.5">{g._count?.songs ?? 0} bài hát</p>
+                </button>
               ))}
             </div>
           </div>

@@ -17,6 +17,7 @@ import { upload } from '../middleware/upload.js';
 import { uploadRateLimiter } from '../middleware/apiRateLimiter.js';
 
 import { requireAdmin } from '../middleware/admin.js';
+import ratingRoutes from './rating.routes.js';
 const router = Router();
 
 router.get('/', optionalAuth, getAllSongs);
@@ -25,6 +26,7 @@ router.get('/top-charts', optionalAuth, getTopCharts);
 router.get('/recommended', optionalAuth, getRecommendedSongs);
 router.get('/my-contributions', requireAuth, requireAdmin, getMySongContributions);
 router.get('/youtube-info', requireAuth, requireAdmin, getYoutubeInfo);
+router.use('/:id/ratings', ratingRoutes);
 router.get('/:id', optionalAuth, getSongById);
 router.post(
   '/',

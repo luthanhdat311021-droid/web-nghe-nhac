@@ -101,7 +101,7 @@ export const ReplaceAudioModal: React.FC<ReplaceAudioModalProps> = ({
               Thay thế file MP3
             </h3>
             <p className="text-xs text-text-muted mt-0.5 truncate max-w-xs">
-              {song.title} • {song.artist?.name || 'Various'}
+              {song.title} • {song.artist?.name || 'Nhiều nghệ sĩ'}
             </p>
           </div>
           <button

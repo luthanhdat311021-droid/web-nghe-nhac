@@ -37,7 +37,7 @@ export const ForgotPassword: React.FC = () => {
   const [infoMessage, setInfoMessage] = useState('');
   const [devOtpHint, setDevOtpHint] = useState('');
 
-  const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const otpInputRef = useRef<HTMLInputElement>(null);
 
   // Timer countdown for OTP resend cooldown
   useEffect(() => {
@@ -80,7 +80,7 @@ export const ForgotPassword: React.FC = () => {
       );
       setStep('OTP');
       // Auto focus first OTP input after step switch
-      setTimeout(() => otpInputRefs.current[0]?.focus(), 150);
+      setTimeout(() => otpInputRef.current?.focus(), 150);
     } catch (err: any) {
       setError(
         err.response?.data?.message || 'Không thể gửi mã xác thực vào lúc này. Vui lòng thử lại.'
@@ -107,7 +107,7 @@ export const ForgotPassword: React.FC = () => {
         res.message || 'Mã xác thực mới đã được gửi lại vào email của bạn.'
       );
       setOtpDigits(['', '', '', '', '', '']);
-      otpInputRefs.current[0]?.focus();
+      otpInputRef.current?.focus();
     } catch (err: any) {
       setError(
         err.response?.data?.message || 'Không thể gửi lại mã xác thực lúc này. Vui lòng thử lại sau.'
@@ -117,48 +117,11 @@ export const ForgotPassword: React.FC = () => {
     }
   };
 
-  // OTP Input handlers: typing, backspacing, paste
-  const handleOtpChange = (index: number, value: string) => {
-    const numericValue = value.replace(/\D/g, '');
-    if (!numericValue) {
-      const nextDigits = [...otpDigits];
-      nextDigits[index] = '';
-      setOtpDigits(nextDigits);
-      return;
-    }
-
-    // Handle single digit input
-    const char = numericValue[numericValue.length - 1];
-    const nextDigits = [...otpDigits];
-    nextDigits[index] = char;
-    setOtpDigits(nextDigits);
-
-    // Auto focus next box
-    if (index < 5) {
-      otpInputRefs.current[index + 1]?.focus();
-    }
-  };
-
-  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Backspace' && !otpDigits[index] && index > 0) {
-      otpInputRefs.current[index - 1]?.focus();
-    }
-  };
-
-  const handleOtpPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
-    e.preventDefault();
-    const pastedData = e.clipboardData.getData('text').trim().replace(/\D/g, '');
-    if (!pastedData) return;
-
-    const digits = pastedData.slice(0, 6).split('');
-    const nextDigits = [...otpDigits];
-    digits.forEach((d, i) => {
-      if (i < 6) nextDigits[i] = d;
-    });
-    setOtpDigits(nextDigits);
-
-    const focusIndex = Math.min(digits.length, 5);
-    otpInputRefs.current[focusIndex]?.focus();
+  // A single native input supports typing, paste and mobile OTP autofill without focus jumps.
+  const handleOtpChange = (value: string) => {
+    const digits = value.replace(/\D/g, '').slice(0, 6);
+    setOtpDigits(Array.from({ length: 6 }, (_, index) => digits[index] || ''));
+    setError('');
   };
 
   // STEP 2: Verify OTP
@@ -195,8 +158,8 @@ export const ForgotPassword: React.FC = () => {
       return;
     }
 
-    if (newPassword.length < 8) {
-      setError('Mật khẩu mới phải có ít nhất 8 ký tự.');
+    if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d|.*[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]).{8,72}$/.test(newPassword)) {
+      setError('Mật khẩu cần 8–72 ký tự, có chữ hoa, chữ thường và chữ số hoặc ký tự đặc biệt.');
       return;
     }
 
@@ -208,6 +171,9 @@ export const ForgotPassword: React.FC = () => {
         newPassword,
         confirmPassword,
       });
+      setResetToken('');
+      setNewPassword('');
+      setConfirmPassword('');
       setStep('SUCCESS');
     } catch (err: any) {
       setError(
@@ -239,7 +205,7 @@ export const ForgotPassword: React.FC = () => {
               'Nhập địa chỉ email đã đăng ký của bạn để nhận mã xác thực đặt lại mật khẩu.'}
             {step === 'OTP' && (
               <>
-                Mã xác thực 6 số đã được gửi đến email{' '}
+                Nếu tài khoản tồn tại, mã xác thực 6 số sẽ được gửi đến email{' '}
                 <strong className="text-white">{getMaskedEmail(email)}</strong>. Mã có hiệu lực trong 5 phút.
               </>
             )}
@@ -328,29 +294,24 @@ export const ForgotPassword: React.FC = () => {
               )}
 
               <div className="space-y-2">
-                <label className="block text-xs font-semibold uppercase tracking-wider text-text-secondary text-center">
+                <label htmlFor="password-reset-otp" className="block text-xs font-semibold uppercase tracking-wider text-text-secondary text-center">
                   Nhập mã 6 chữ số
                 </label>
 
-                {/* 6-box OTP Input */}
-                <div className="flex items-center justify-between gap-1.5 sm:gap-2">
-                  {otpDigits.map((digit, idx) => (
-                    <input
-                      key={idx}
-                      ref={(el) => (otpInputRefs.current[idx] = el)}
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      maxLength={1}
-                      value={digit}
-                      onChange={(e) => handleOtpChange(idx, e.target.value)}
-                      onKeyDown={(e) => handleOtpKeyDown(idx, e)}
-                      onPaste={idx === 0 ? handleOtpPaste : undefined}
-                      aria-label={`OTP digit ${idx + 1}`}
-                      className="w-11 h-12 sm:w-12 sm:h-13 rounded-xl bg-white/[0.05] border border-white/10 text-center text-lg font-bold text-white outline-none focus:border-white focus:ring-1 focus:ring-white transition-all select-none"
-                    />
-                  ))}
-                </div>
+                <input
+                  ref={otpInputRef}
+                  id="password-reset-otp"
+                  name="otp"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  pattern="[0-9]{6}"
+                  value={otpDigits.join('')}
+                  onChange={(e) => handleOtpChange(e.target.value)}
+                  aria-label="Mã OTP 6 chữ số"
+                  placeholder="000000"
+                  className="w-full h-14 rounded-xl bg-white/[0.05] border border-white/10 text-center text-2xl tracking-[0.5em] font-mono font-bold text-white outline-none focus:border-white focus:ring-1 focus:ring-white transition-all placeholder:text-white/20"
+                />
               </div>
 
               <Button

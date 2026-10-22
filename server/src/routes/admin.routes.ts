@@ -26,7 +26,8 @@ import {
 import { requireAdmin } from '../middleware/admin.js';
 import { requireAuth } from '../middleware/auth.js';
 import { upload } from '../middleware/upload.js';
-import { uploadRateLimiter } from '../middleware/apiRateLimiter.js';
+import { uploadRateLimiter, searchRateLimiter } from '../middleware/apiRateLimiter.js';
+import { classifyUnassignedGenres } from '../controllers/genreClassification.controller.js';
 
 const router = Router();
 
@@ -120,6 +121,7 @@ router.delete('/albums/:id', deleteAlbum);
 
 // Genres
 router.get('/genres', getAllGenres);
+router.post('/genres/classify', searchRateLimiter, classifyUnassignedGenres);
 
 // Users
 router.get('/users', getAllUsers);

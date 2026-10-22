@@ -75,7 +75,7 @@ export const ArtistModal: React.FC<ArtistModalProps> = ({
       onSuccess();
       onClose();
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to save artist');
+      alert(err.response?.data?.message || 'Không thể lưu nghệ sĩ.');
     } finally {
       setLoading(false);
     }
@@ -85,7 +85,7 @@ export const ArtistModal: React.FC<ArtistModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={artist ? 'Edit artist' : 'Add artist'}
+      title={artist ? 'Sửa nghệ sĩ' : 'Thêm nghệ sĩ'}
       maxWidth="lg"
     >
       <form onSubmit={handleSubmit} className="space-y-4 max-h-[75vh] overflow-y-auto pr-1">
@@ -98,7 +98,7 @@ export const ArtistModal: React.FC<ArtistModalProps> = ({
         <div className="grid grid-cols-2 gap-3">
           <Input
             label="Quốc gia"
-            placeholder="e.g. Việt Nam"
+            placeholder="Ví dụ: Việt Nam"
             value={country}
             onChange={(e) => setCountry(e.target.value)}
           />
@@ -110,13 +110,13 @@ export const ArtistModal: React.FC<ArtistModalProps> = ({
           />
         </div>
         <Input
-          label="Avatar URL"
+          label="URL ảnh đại diện"
           placeholder="https://images.unsplash.com/..."
           value={avatarUrl}
           onChange={(e) => setAvatarUrl(e.target.value)}
         />
         <Input
-          label="Banner URL"
+          label="URL ảnh bìa"
           placeholder="https://images.unsplash.com/..."
           value={bannerUrl}
           onChange={(e) => setBannerUrl(e.target.value)}
@@ -139,14 +139,14 @@ export const ArtistModal: React.FC<ArtistModalProps> = ({
             onChange={(e) => setVerified(e.target.checked)}
             className="w-4 h-4 rounded border-white/20 text-white focus:ring-0"
           />
-          <span className="text-xs text-white">Đã xác minh (Verified)</span>
+          <span className="text-xs text-white">Nghệ sĩ đã xác minh</span>
         </label>
         <div className="flex justify-end gap-2 pt-3 border-t border-white/5">
           <Button type="button" variant="ghost" size="sm" onClick={onClose}>
-            Cancel
+            Hủy
           </Button>
           <Button type="submit" variant="primary" size="sm" isLoading={loading}>
-            Save artist
+            Lưu nghệ sĩ
           </Button>
         </div>
       </form>

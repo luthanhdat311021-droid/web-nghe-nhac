@@ -535,9 +535,9 @@ export const AdminMusicLibrary: React.FC = () => {
             </div>
             <div>
               <h1 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
-                Music Library
+                Thư viện nhạc
                 <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-white/10 text-text-secondary border border-white/10">
-                  {totalSongs} songs
+                  {totalSongs} bài hát
                 </span>
               </h1>
               <p className="text-xs text-text-muted">
@@ -585,7 +585,7 @@ export const AdminMusicLibrary: React.FC = () => {
             }`}
           >
             <History className="w-3.5 h-3.5" />
-            Lịch sử Import
+            Lịch sử nhập nhạc
           </button>
         </div>
       </div>
@@ -655,7 +655,7 @@ export const AdminMusicLibrary: React.FC = () => {
               }}
               className="h-9 px-3 rounded-xl bg-[#12141a] border border-white/10 text-xs text-text-secondary outline-none focus:border-amber-400/40 cursor-pointer"
             >
-              <option value="latest">Mới nhất (Recently Added)</option>
+              <option value="latest">Mới thêm gần đây</option>
               <option value="popular">Nhiều lượt nghe nhất</option>
               <option value="oldest">Cũ nhất</option>
             </select>
@@ -781,7 +781,7 @@ export const AdminMusicLibrary: React.FC = () => {
                               to={`/artist/${song.artistId}`}
                               className="text-text-secondary hover:text-white hover:underline flex items-center gap-1.5 truncate max-w-[140px]"
                             >
-                              <span>{song.artist?.name || 'Various'}</span>
+                              <span>{song.artist?.name || 'Nhiều nghệ sĩ'}</span>
                               <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
                             </Link>
                           </td>
@@ -793,10 +793,10 @@ export const AdminMusicLibrary: React.FC = () => {
                                 to={`/album/${song.albumId}`}
                                 className="text-text-muted hover:text-white hover:underline truncate max-w-[130px] block"
                               >
-                                {song.album?.title || 'Single'}
+                                {song.album?.title || 'Đĩa đơn'}
                               </Link>
                             ) : (
-                              <span className="text-text-muted">Single</span>
+                              <span className="text-text-muted">Đĩa đơn</span>
                             )}
                           </td>
 
@@ -889,7 +889,7 @@ export const AdminMusicLibrary: React.FC = () => {
                     />
                     <div className="min-w-0 flex-1">
                       <h4 className="font-bold text-white text-sm truncate">{song.title}</h4>
-                      <p className="text-xs text-text-muted truncate mt-0.5">{song.artist?.name || 'Various'}</p>
+                      <p className="text-xs text-text-muted truncate mt-0.5">{song.artist?.name || 'Nhiều nghệ sĩ'}</p>
                       <div className="flex items-center gap-2 text-[11px] text-text-muted font-mono mt-1">
                         <span>{formatDuration(song.duration)}</span>
                         <span>•</span>
@@ -1016,11 +1016,11 @@ export const AdminMusicLibrary: React.FC = () => {
               </div>
               <div>
                 <h3 className="text-base font-bold text-white">
-                  Kéo thả file MP3 hoặc thư mục nhạc vào đây
+                  Kéo thả tệp MP3 hoặc thư mục nhạc vào đây
                 </h3>
                 <p className="text-xs text-text-muted mt-1">
-                  Hỗ trợ tải 1 lúc 10, 50, 100, 500+ bài hát (.mp3). Hệ thống tự động trích xuất ID3 tags,
-                  ảnh bìa và nhận diện tên file thông minh.
+                  Hỗ trợ tải cùng lúc 10, 50, 100 hoặc hơn 500 bài hát (.mp3). Hệ thống tự động đọc thông tin ID3,
+                  ảnh bìa và nhận diện tên tệp.
                 </p>
               </div>
 
@@ -1031,7 +1031,7 @@ export const AdminMusicLibrary: React.FC = () => {
                   onClick={() => fileInputRef.current?.click()}
                   leftIcon={<Music2 className="w-4 h-4" />}
                 >
-                  Chọn nhiều file MP3
+                  Chọn nhiều tệp MP3
                 </Button>
                 <Button
                   variant="secondary"
@@ -1051,7 +1051,7 @@ export const AdminMusicLibrary: React.FC = () => {
               <div className="flex items-center gap-2">
                 <RefreshCw className="w-4 h-4 animate-spin" />
                 <span>
-                  Đang đọc metadata ID3 & trích xuất ảnh bìa ({parsingProgress.current} / {parsingProgress.total} files)...
+                  Đang đọc thông tin ID3 và trích xuất ảnh bìa ({parsingProgress.current} / {parsingProgress.total} tệp)...
                 </span>
               </div>
               <span className="font-mono font-bold">
@@ -1069,7 +1069,7 @@ export const AdminMusicLibrary: React.FC = () => {
                   <span>Đang tải lên và lưu vào cơ sở dữ liệu...</span>
                 </div>
                 <span className="font-mono text-amber-400 font-bold">
-                  {uploadMetrics.done} / {uploadMetrics.total} songs ({uploadMetrics.percent}%)
+                  {uploadMetrics.done} / {uploadMetrics.total} bài hát ({uploadMetrics.percent}%)
                 </span>
               </div>
 
@@ -1090,7 +1090,7 @@ export const AdminMusicLibrary: React.FC = () => {
                 <div className="flex items-center gap-2.5">
                   <CheckCircle2 className="w-5 h-5 text-emerald-400" />
                   <div>
-                    <h4 className="text-sm font-bold text-white">Đợt import đã hoàn tất!</h4>
+                    <h4 className="text-sm font-bold text-white">Đợt nhập nhạc đã hoàn tất!</h4>
                     <p className="text-xs text-text-muted mt-0.5">
                       Thành công: <span className="text-emerald-400 font-bold">{batchSummary.success}</span> • 
                       Bỏ qua trùng: <span className="text-amber-400 font-bold">{batchSummary.skipped}</span> • 
@@ -1134,7 +1134,7 @@ export const AdminMusicLibrary: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                   <span className="text-xs font-bold text-white">
-                    {parsedQueue.length} bài hát sẵn sàng import
+                    {parsedQueue.length} bài hát sẵn sàng nhập
                   </span>
                 </div>
 
@@ -1171,7 +1171,7 @@ export const AdminMusicLibrary: React.FC = () => {
                     onClick={startBatchImport}
                     leftIcon={<Upload className="w-3.5 h-3.5" />}
                   >
-                    Import {parsedQueue.length} Bài Hát
+                    Nhập {parsedQueue.length} bài hát
                   </Button>
                 </div>
               </div>
@@ -1182,12 +1182,12 @@ export const AdminMusicLibrary: React.FC = () => {
                   <table className="w-full text-left text-xs">
                     <thead className="bg-white/[0.03] text-text-muted uppercase text-[10px] tracking-wider border-b border-white/5 font-semibold">
                       <tr>
-                        <th className="p-3.5 w-16">Cover</th>
+                        <th className="p-3.5 w-16">Ảnh bìa</th>
                         <th className="p-3.5 min-w-[200px]">Tên bài hát</th>
                         <th className="p-3.5 min-w-[180px]">Nghệ sĩ</th>
                         <th className="p-3.5 min-w-[150px]">Album</th>
                         <th className="p-3.5 w-28">Thể loại</th>
-                        <th className="p-3.5 w-20">Track</th>
+                        <th className="p-3.5 w-20">Số thứ tự</th>
                         <th className="p-3.5 w-24">Thời lượng</th>
                         <th className="p-3.5 w-36">Trạng thái</th>
                         <th className="p-3.5 w-12 text-center">Xóa</th>
@@ -1202,7 +1202,7 @@ export const AdminMusicLibrary: React.FC = () => {
                               {item.coverPreviewUrl ? (
                                 <img
                                   src={item.coverPreviewUrl}
-                                  alt="Cover"
+                                  alt="Ảnh bìa"
                                   className="w-full h-full object-cover"
                                 />
                               ) : (
@@ -1283,9 +1283,9 @@ export const AdminMusicLibrary: React.FC = () => {
                                   onChange={(e: any) => handleUpdateParsedItem(item.id, 'duplicateAction', e.target.value)}
                                   className="w-full h-6 px-1.5 rounded bg-[#12141a] border border-white/10 text-[10px] text-text-secondary outline-none"
                                 >
-                                  <option value="skip">Bỏ qua (Skip)</option>
-                                  <option value="replace">Ghi đè (Replace)</option>
-                                  <option value="keep">Giữ cả hai (Keep Both)</option>
+                                  <option value="skip">Bỏ qua</option>
+                                  <option value="replace">Ghi đè bài hiện có</option>
+                                  <option value="keep">Giữ cả hai</option>
                                 </select>
                               </div>
                             ) : (
@@ -1318,7 +1318,7 @@ export const AdminMusicLibrary: React.FC = () => {
           {batchItemsState.length > 0 && (isBatchUploading || batchCompleted) && (
             <div className="space-y-3">
               <h4 className="text-xs font-bold text-white uppercase tracking-wider">
-                Trạng thái chi tiết từng file ({batchItemsState.length} files)
+                Trạng thái chi tiết từng tệp ({batchItemsState.length} tệp)
               </h4>
 
               <div className="rounded-2xl bg-white/[0.02] border border-white/[0.06] divide-y divide-white/[0.03] max-h-96 overflow-y-auto">
@@ -1405,7 +1405,7 @@ export const AdminMusicLibrary: React.FC = () => {
                 <thead className="bg-white/[0.03] text-text-muted uppercase text-[10px] tracking-wider border-b border-white/5 font-semibold">
                   <tr>
                     <th className="p-3.5">Thời gian</th>
-                    <th className="p-3.5">Tổng số file</th>
+                    <th className="p-3.5">Tổng số tệp</th>
                     <th className="p-3.5">Thành công</th>
                     <th className="p-3.5">Thất bại</th>
                     <th className="p-3.5 text-right">Chi tiết</th>
@@ -1415,13 +1415,13 @@ export const AdminMusicLibrary: React.FC = () => {
                   {historyLoading ? (
                     <tr>
                       <td colSpan={5} className="p-8 text-center text-text-muted">
-                        Đang tải lịch sử import...
+                        Đang tải lịch sử nhập nhạc...
                       </td>
                     </tr>
                   ) : historyBatches.length === 0 ? (
                     <tr>
                       <td colSpan={5} className="p-8 text-center text-text-muted">
-                        Chưa có lịch sử import nào.
+                        Chưa có lịch sử nhập nhạc.
                       </td>
                     </tr>
                   ) : (
@@ -1431,7 +1431,7 @@ export const AdminMusicLibrary: React.FC = () => {
                           {new Date(batch.createdAt).toLocaleString('vi-VN')}
                         </td>
                         <td className="p-3.5 font-mono font-bold text-white">
-                          {batch.totalFiles} files
+                          {batch.totalFiles} tệp
                         </td>
                         <td className="p-3.5 text-emerald-400 font-mono font-semibold">
                           {batch.successCount} thành công
@@ -1526,12 +1526,12 @@ export const AdminMusicLibrary: React.FC = () => {
               <p className="font-bold text-white">
                 {deleteConfirmSong.title}
                 <span className="text-text-muted font-normal ml-2">
-                  • {deleteConfirmSong.artist?.name || 'Various'}
+                  • {deleteConfirmSong.artist?.name || 'Nhiều nghệ sĩ'}
                 </span>
               </p>
               <ul className="text-text-secondary list-disc list-inside space-y-1 text-[11px]">
-                <li>Xóa bản ghi bài hát trong Database</li>
-                <li>Xóa file MP3 đã lưu trữ trên Supabase Storage</li>
+                <li>Xóa bản ghi bài hát trong cơ sở dữ liệu</li>
+                <li>Xóa tệp MP3 đã lưu trên Supabase Storage</li>
                 <li>Dọn dẹp ảnh bìa liên quan (nếu không dùng chung)</li>
               </ul>
             </div>
@@ -1566,11 +1566,11 @@ export const AdminMusicLibrary: React.FC = () => {
               <div>
                 <h3 className="text-base font-bold text-white flex items-center gap-2">
                   <History className="w-4 h-4 text-amber-400" />
-                  Chi tiết đợt Import
+                  Chi tiết đợt nhập nhạc
                 </h3>
                 <p className="text-xs text-text-muted mt-0.5">
                   {new Date(selectedBatchDetails.createdAt).toLocaleString('vi-VN')} •{' '}
-                  {selectedBatchDetails.totalFiles} files
+                  {selectedBatchDetails.totalFiles} tệp
                 </p>
               </div>
               <button
@@ -1608,13 +1608,13 @@ export const AdminMusicLibrary: React.FC = () => {
                         <span className="text-amber-400 text-[11px]">Đã bỏ qua</span>
                       )}
                       {log.status === 'FAILED' && (
-                        <span className="text-red-400 text-[11px]">{log.errorMessage || 'Lỗi upload'}</span>
+                        <span className="text-red-400 text-[11px]">{log.errorMessage || 'Lỗi tải lên'}</span>
                       )}
                     </div>
                   </div>
                 ))
               ) : (
-                <p className="text-center py-6 text-xs text-text-muted">Không có log chi tiết.</p>
+                <p className="text-center py-6 text-xs text-text-muted">Không có nhật ký chi tiết.</p>
               )}
             </div>
 

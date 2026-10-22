@@ -346,7 +346,7 @@ export const SongModal: React.FC<SongModalProps> = ({
       if (finalDur > 0) {
         setDuration(String(finalDur));
         const durLabel = formatSecondsToMMSS(finalDur);
-        setMetaFeedback(`Tự động nhận diện: "${meta?.title || 'YouTube Track'}" (${durLabel})`);
+        setMetaFeedback(`Tự động nhận diện: "${meta?.title || 'Bài hát YouTube'}" (${durLabel})`);
       } else if (meta?.title) {
         setMetaFeedback(`Tự động nhận diện: "${meta.title}"`);
       }
@@ -420,7 +420,7 @@ export const SongModal: React.FC<SongModalProps> = ({
         formData.append('audioUrl', youtubeUrl.trim());
       } else if (sourceType === 'upload') {
         if (audioFile && audioFile.size > 4.5 * 1024 * 1024) {
-          alert(`File audio "${audioFile.name}" (${(audioFile.size / 1024 / 1024).toFixed(1)}MB) vượt quá giới hạn 4.5MB của serverless. Vui lòng nén file hoặc dùng tab YouTube URL.`);
+          alert(`Tệp âm thanh "${audioFile.name}" (${(audioFile.size / 1024 / 1024).toFixed(1)} MB) vượt quá giới hạn 4,5 MB. Vui lòng nén tệp hoặc chọn nguồn URL YouTube.`);
           setLoading(false);
           return;
         }
@@ -482,7 +482,7 @@ export const SongModal: React.FC<SongModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={song ? 'Edit song' : 'Add song'}
+      title={song ? 'Sửa bài hát' : 'Thêm bài hát'}
       maxWidth="xl"
     >
       <form onSubmit={handleSubmit} className="space-y-4 max-h-[75vh] overflow-y-auto no-scrollbar pr-1 pb-2">
@@ -702,7 +702,7 @@ export const SongModal: React.FC<SongModalProps> = ({
               }`}
             >
               <Upload className="w-3.5 h-3.5" />
-              <span className="truncate">Upload MP3</span>
+              <span className="truncate">Tải tệp MP3 lên</span>
             </button>
           </div>
 
@@ -753,7 +753,7 @@ export const SongModal: React.FC<SongModalProps> = ({
           {sourceType === 'upload' && (
             <div className="space-y-2 pt-1">
               <label className="block text-xs font-semibold uppercase tracking-wider text-text-secondary">
-                Upload file âm thanh MP3
+                Tải tệp âm thanh MP3 lên
               </label>
               <div className="flex flex-col sm:flex-row items-center gap-3 p-3 rounded-lg border border-dashed border-white/15 bg-white/[0.01]">
                 <Upload className="w-5 h-5 text-text-muted flex-shrink-0" />
@@ -780,7 +780,7 @@ export const SongModal: React.FC<SongModalProps> = ({
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold uppercase tracking-wider text-text-secondary flex items-center gap-1.5">
               <Image className="w-4 h-4 text-text-muted" />
-              Ảnh bìa (Cover Image)
+              Ảnh bìa
             </span>
 
             {/* Cover Option Toggle */}
@@ -801,7 +801,7 @@ export const SongModal: React.FC<SongModalProps> = ({
                   coverType === 'upload' ? 'bg-white text-black font-semibold' : 'text-text-muted hover:text-white'
                 }`}
               >
-                Upload
+                Tải lên
               </button>
             </div>
           </div>
@@ -900,10 +900,10 @@ export const SongModal: React.FC<SongModalProps> = ({
         {/* Action Buttons */}
         <div className="flex justify-end gap-2 pt-3 border-t border-white/10">
           <Button type="button" variant="ghost" size="sm" onClick={onClose}>
-            Cancel
+            Hủy
           </Button>
           <Button type="submit" variant="primary" size="sm" isLoading={loading}>
-            Save song
+            Lưu bài hát
           </Button>
         </div>
       </form>

@@ -1,4 +1,5 @@
 import { MusicPro } from './pages/MusicPro.js';
+import { Jam } from './pages/Jam.js';
 import { PlaybackAd } from './components/player/PlaybackAd.js';
 import React, { useEffect, Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
@@ -29,6 +30,7 @@ import { Contributions } from './pages/Contributions.js';
 import { Login } from './pages/auth/Login.js';
 import { Register } from './pages/auth/Register.js';
 import { ForgotPassword } from './pages/auth/ForgotPassword.js';
+import { GoogleCallback } from './pages/auth/GoogleCallback.js';
 
 // Admin Pages (Isolated Heavy Bundle)
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard.js').then((m) => ({ default: m.AdminDashboard })));
@@ -66,6 +68,7 @@ export const App: React.FC = () => {
       <LogoutConfirmModal />
       <PlaybackAd />
       <Routes>
+        <Route path="/auth/google/callback" element={<GoogleCallback />} />
         {/* Main Client Shell - Instant 0ms switching */}
         <Route path="/" element={<MainLayout />}>
           <Route index element={<Home />} />
@@ -81,6 +84,8 @@ export const App: React.FC = () => {
           <Route path="favorites" element={<Favorites />} />
           <Route path="history" element={<History />} />
           <Route path="music-pro" element={<MusicPro />} />
+          <Route path="jam" element={<Jam />} />
+          <Route path="jam/:code" element={<Jam />} />
           <Route path="profile" element={<Profile />} />
           <Route path="contributions" element={user?.role === 'ADMIN' ? <Contributions /> : <Navigate to="/music-pro" replace />} />
           <Route path="add-song" element={user?.role === 'ADMIN' ? <Contributions /> : <Navigate to="/music-pro" replace />} />

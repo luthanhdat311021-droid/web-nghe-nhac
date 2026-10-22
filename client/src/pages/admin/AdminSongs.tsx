@@ -45,7 +45,7 @@ export const AdminSongs: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('Delete this song permanently?')) return;
+    if (!window.confirm('Bạn có chắc muốn xóa vĩnh viễn bài hát này?')) return;
     try {
       await adminService.deleteSong(id);
       fetchSongs();
@@ -78,7 +78,7 @@ export const AdminSongs: React.FC = () => {
           leftIcon={<Plus className="w-3.5 h-3.5" />}
           className="self-start sm:self-auto"
         >
-          Add song
+          Thêm bài hát
         </Button>
       </div>
 
@@ -120,7 +120,7 @@ export const AdminSongs: React.FC = () => {
                 />
                 <div className="min-w-0 flex-1">
                   <h4 className="font-bold text-white text-xs sm:text-sm truncate">{song.title}</h4>
-                  <p className="text-[11px] text-text-muted truncate mt-0.5">{song.artist?.name || 'Various Artists'}</p>
+                  <p className="text-[11px] text-text-muted truncate mt-0.5">{song.artist?.name || 'Nhiều nghệ sĩ'}</p>
                 </div>
               </div>
 
@@ -135,7 +135,7 @@ export const AdminSongs: React.FC = () => {
                 <div className="flex items-center gap-1">
                   {song.isTrending && (
                     <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-pink-500/10 text-pink-400 border border-pink-500/20">
-                      Trending
+                      Thịnh hành
                     </span>
                   )}
                 </div>
@@ -150,7 +150,7 @@ export const AdminSongs: React.FC = () => {
                   leftIcon={<Edit className="w-3.5 h-3.5" />}
                   className="flex-1"
                 >
-                  Edit
+                  Sửa
                 </Button>
                 <Button
                   onClick={() => handleDelete(song.id)}
@@ -159,7 +159,7 @@ export const AdminSongs: React.FC = () => {
                   leftIcon={<Trash2 className="w-3.5 h-3.5" />}
                   className="flex-1"
                 >
-                  Delete
+                  Xóa
                 </Button>
               </div>
             </div>
@@ -211,16 +211,16 @@ export const AdminSongs: React.FC = () => {
                             {song.title}
                           </span>
                           <span className="text-[11px] text-text-muted">
-                            {song.album?.title || 'Single'}
+                            {song.album?.title || 'Đĩa đơn'}
                           </span>
                         </div>
                       </div>
                     </td>
                     <td className="p-3.5 text-text-secondary">
-                      {song.artist?.name || 'Various'}
+                      {song.artist?.name || 'Nhiều nghệ sĩ'}
                     </td>
                     <td className="p-3.5 text-text-muted">
-                      {song.genre?.name || 'Various'}
+                      {song.genre?.name || 'Khác'}
                     </td>
                     <td className="p-3.5 font-mono text-text-muted">
                       {formatDuration(song.duration)}
@@ -236,7 +236,7 @@ export const AdminSongs: React.FC = () => {
                           size="sm"
                           leftIcon={<Edit className="w-3.5 h-3.5" />}
                         >
-                          Edit
+                          Sửa
                         </Button>
                         <Button
                           onClick={() => handleDelete(song.id)}
@@ -244,7 +244,7 @@ export const AdminSongs: React.FC = () => {
                           size="sm"
                           leftIcon={<Trash2 className="w-3.5 h-3.5" />}
                         >
-                          Delete
+                          Xóa
                         </Button>
                       </div>
                     </td>
@@ -269,7 +269,7 @@ export const AdminSongs: React.FC = () => {
               disabled={page <= 1}
               onClick={() => setPage((p) => p - 1)}
             >
-              Prev
+              Trước
             </Button>
             <Button
               variant="secondary"
@@ -277,7 +277,7 @@ export const AdminSongs: React.FC = () => {
               disabled={page >= totalPages}
               onClick={() => setPage((p) => p + 1)}
             >
-              Next
+              Sau
             </Button>
           </div>
         </div>

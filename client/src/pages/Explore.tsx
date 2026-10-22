@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { Genre, Song } from '../types/index.js';
@@ -17,7 +18,9 @@ import { INITIAL_GENRES, INITIAL_TRENDING_SONGS } from '../data/initialCatalog';
 
 export const Explore: React.FC = () => {
   const isAuthenticated = useAuthStore((s) => s.user?.role === 'ADMIN');
-  const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedGenre = searchParams.get('genre');
+  const setSelectedGenre = (genre: string | null) => setSearchParams(genre ? { genre } : {});
   const [page, setPage] = useState(1);
 
   // Modals

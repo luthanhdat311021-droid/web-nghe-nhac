@@ -44,7 +44,7 @@ class EmailService {
               },
             };
 
-        this.transporter = nodemailer.createTransport(transportOptions);
+        this.transporter = nodemailer.createTransport({ ...transportOptions, connectionTimeout: 10000, greetingTimeout: 10000, socketTimeout: 15000 });
         this.isConfigured = true;
 
         console.log(`📧 [EMAIL SERVICE] SMTP Initialized (${isGmail ? 'Gmail Service' : host || 'Custom SMTP'}) for account: ${user}`);

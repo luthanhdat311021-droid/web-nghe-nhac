@@ -10,6 +10,7 @@ import {
   resetPassword,
 } from '../controllers/auth.controller.js';
 import { requireAuth } from '../middleware/auth.js';
+import { startGoogleLogin, finishGoogleLogin, confirmGoogleLink } from '../controllers/googleAuth.controller.js';
 import {
   authRateLimiter,
   passwordResetRequestLimiter,
@@ -21,6 +22,9 @@ const router = Router();
 // Rate-limited sensitive authentication endpoints
 router.post('/register', authRateLimiter, register);
 router.post('/login', authRateLimiter, login);
+router.post('/google/start', authRateLimiter, startGoogleLogin);
+router.post('/google/exchange', authRateLimiter, finishGoogleLogin);
+router.post('/google/link', authRateLimiter, confirmGoogleLink);
 router.post('/change-password', requireAuth, authRateLimiter, changePassword);
 
 // Forgot password & OTP verification endpoints

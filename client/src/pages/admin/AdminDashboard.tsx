@@ -69,7 +69,7 @@ export const AdminDashboard: React.FC = () => {
       <div>
         <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-white tracking-tight flex items-center gap-2 sm:gap-2.5">
           <ShieldCheck className="w-6 h-6 sm:w-8 sm:h-8 text-amber-400 flex-shrink-0" />
-          <span>System Overview & Analytics</span>
+          <span>Tổng quan & phân tích hệ thống</span>
         </h1>
         <p className="text-xs sm:text-sm text-text-secondary mt-0.5">
           Dữ liệu thực từ hệ thống • Giờ Việt Nam • Cập nhật mỗi 30 giây
@@ -81,27 +81,27 @@ export const AdminDashboard: React.FC = () => {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
         <StatsCard
-          title="Total Users"
+          title="Tổng người dùng"
           value={formatNumber(stats.kpi.totalUsers)}
           icon={<Users className="w-4 h-4 sm:w-5 sm:h-5 text-text-secondary" />}
         />
         <StatsCard
-          title="Total Songs"
+          title="Tổng bài hát"
           value={stats.kpi.totalSongs}
           icon={<Music2 className="w-4 h-4 sm:w-5 sm:h-5 text-text-secondary" />}
         />
         <StatsCard
-          title="Total Artists"
+          title="Tổng nghệ sĩ"
           value={stats.kpi.totalArtists}
           icon={<Users className="w-4 h-4 sm:w-5 sm:h-5 text-text-secondary" />}
         />
         <StatsCard
-          title="Total Albums"
+          title="Tổng album"
           value={stats.kpi.totalAlbums}
           icon={<Disc className="w-4 h-4 sm:w-5 sm:h-5 text-text-secondary" />}
         />
         <StatsCard
-          title="Playlists"
+          title="Danh sách phát"
           value={stats.kpi.totalPlaylists}
           icon={<ListMusic className="w-4 h-4 sm:w-5 sm:h-5 text-text-secondary" />}
         />
@@ -213,7 +213,7 @@ export const AdminDashboard: React.FC = () => {
         <div className="p-4 sm:p-6 rounded-3xl bg-background-card border border-white/5 space-y-3.5 shadow-xl">
           <h3 className="font-bold text-white text-sm sm:text-base flex items-center gap-2">
             <Play className="w-4 h-4 text-purple-400" />
-            Top Streamed Tracks
+            Bài hát được nghe nhiều nhất
           </h3>
           <div className="space-y-2">
             {stats.topSongs.length === 0 && <p className="text-sm text-text-muted py-4">Chưa có lượt phát được ghi nhận.</p>}
@@ -237,7 +237,7 @@ export const AdminDashboard: React.FC = () => {
                   </div>
                 </div>
                 <span className="text-xs font-mono text-primary-400 font-semibold flex-shrink-0">
-                  {formatNumber(song.playsCount)} plays
+                  {formatNumber(song.playsCount)} lượt nghe
                 </span>
               </div>
             ))}
@@ -248,7 +248,7 @@ export const AdminDashboard: React.FC = () => {
         <div className="p-4 sm:p-6 rounded-3xl bg-background-card border border-white/5 space-y-3.5 shadow-xl">
           <h3 className="font-bold text-white text-base flex items-center gap-2">
             <Users className="w-4 h-4 text-accent-cyan" />
-            Recently Registered Users
+            Người dùng đăng ký gần đây
           </h3>
           <div className="space-y-2">
             {stats.recentUsers.map((u) => (
@@ -264,7 +264,7 @@ export const AdminDashboard: React.FC = () => {
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <p className="text-xs sm:text-sm font-bold text-white truncate">{u.username}</p>
                       <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-white/10 text-text-muted">
-                        {u.role}
+                        {u.role === 'ADMIN' ? 'Quản trị viên' : 'Người dùng'}
                       </span>
                     </div>
                     <p className="text-[11px] text-text-secondary truncate">{u.email}</p>

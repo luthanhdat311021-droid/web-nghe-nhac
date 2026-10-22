@@ -45,7 +45,7 @@ export const AdminAlbums: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('Delete this album?')) return;
+    if (!window.confirm('Bạn có chắc muốn xóa album này?')) return;
     try {
       await adminService.deleteAlbum(id);
       fetchAlbums();
@@ -78,7 +78,7 @@ export const AdminAlbums: React.FC = () => {
           leftIcon={<Plus className="w-3.5 h-3.5" />}
           className="self-start sm:self-auto"
         >
-          Add album
+          Thêm album
         </Button>
       </div>
 
@@ -118,7 +118,7 @@ export const AdminAlbums: React.FC = () => {
                 <div className="min-w-0 flex-1">
                   <h4 className="font-bold text-white text-xs sm:text-sm truncate">{album.title}</h4>
                   <p className="text-[11px] text-text-muted mt-0.5">
-                    {album.artist?.name || 'Various'} • {formatDate(album.releaseDate)}
+                    {album.artist?.name || 'Nhiều nghệ sĩ'} • {formatDate(album.releaseDate)}
                   </p>
                 </div>
               </div>
@@ -131,7 +131,7 @@ export const AdminAlbums: React.FC = () => {
                   leftIcon={<Edit className="w-3.5 h-3.5" />}
                   className="flex-1"
                 >
-                  Edit
+                  Sửa
                 </Button>
                 <Button
                   onClick={() => handleDelete(album.id)}
@@ -140,7 +140,7 @@ export const AdminAlbums: React.FC = () => {
                   leftIcon={<Trash2 className="w-3.5 h-3.5" />}
                   className="flex-1"
                 >
-                  Delete
+                  Xóa
                 </Button>
               </div>
             </div>
@@ -189,7 +189,7 @@ export const AdminAlbums: React.FC = () => {
                       </div>
                     </td>
                     <td className="p-3.5 text-text-secondary">
-                      {album.artist?.name || 'Various'}
+                      {album.artist?.name || 'Nhiều nghệ sĩ'}
                     </td>
                     <td className="p-3.5 text-text-muted">
                       {formatDate(album.releaseDate)}
@@ -202,7 +202,7 @@ export const AdminAlbums: React.FC = () => {
                           size="sm"
                           leftIcon={<Edit className="w-3.5 h-3.5" />}
                         >
-                          Edit
+                          Sửa
                         </Button>
                         <Button
                           onClick={() => handleDelete(album.id)}
@@ -210,7 +210,7 @@ export const AdminAlbums: React.FC = () => {
                           size="sm"
                           leftIcon={<Trash2 className="w-3.5 h-3.5" />}
                         >
-                          Delete
+                          Xóa
                         </Button>
                       </div>
                     </td>
@@ -235,7 +235,7 @@ export const AdminAlbums: React.FC = () => {
               disabled={page <= 1}
               onClick={() => setPage((p) => p - 1)}
             >
-              Prev
+              Trước
             </Button>
             <Button
               variant="secondary"
@@ -243,7 +243,7 @@ export const AdminAlbums: React.FC = () => {
               disabled={page >= totalPages}
               onClick={() => setPage((p) => p + 1)}
             >
-              Next
+              Sau
             </Button>
           </div>
         </div>

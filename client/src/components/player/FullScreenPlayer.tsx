@@ -20,7 +20,9 @@ import {
   RotateCcw,
   RotateCw,
   Gauge,
+  SlidersHorizontal,
 } from 'lucide-react';
+import { useAudioFxStore } from '../../store/audioFxStore.js';
 import { Link } from 'react-router-dom';
 import {
   usePlayerStore,
@@ -78,6 +80,8 @@ export const FullScreenPlayer: React.FC = () => {
   const closeFullScreenPlayer = usePlayerStore((s) => s.closeFullScreenPlayer);
   const toggleLyrics = usePlayerStore((s) => s.toggleLyrics);
   const toggleQueue = usePlayerStore((s) => s.toggleQueue);
+  const openFx = useAudioFxStore((s) => s.openPanel);
+  const fxEnabled = useAudioFxStore((s) => s.enabled);
 
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const isLiked = useFavoriteStore((s) => s.isLiked(currentSong?.id || '', currentSong?.isLiked || false));
@@ -344,6 +348,16 @@ export const FullScreenPlayer: React.FC = () => {
               )}
 
               <div className="flex items-center gap-1.5 ml-auto">
+                <button
+                  onClick={openFx}
+                  aria-label="Âm thanh Pro"
+                  className={`p-2 rounded-lg border border-white/[0.08] transition-colors active:scale-95 ${
+                    fxEnabled ? 'text-amber-300 bg-amber-300/10' : 'text-text-secondary bg-white/[0.04] hover:text-white'
+                  }`}
+                >
+                  <SlidersHorizontal className="w-3.5 h-3.5" />
+                </button>
+
                 <button
                   onClick={toggleLyrics}
                   aria-label="Lyrics"

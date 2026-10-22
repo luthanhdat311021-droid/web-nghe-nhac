@@ -99,6 +99,10 @@ export const Sidebar: React.FC = () => {
               <Compass className="w-4 h-4" />
               <span>Khám phá</span>
             </NavLink>
+            <NavLink to="/jam" className={navItemClass}>
+              <Users className="w-4 h-4 text-emerald-300" />
+              <span>Nghe chung</span>
+            </NavLink>
           </div>
 
           {/* Library Section */}

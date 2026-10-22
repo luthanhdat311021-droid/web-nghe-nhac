@@ -4,6 +4,10 @@ import api from '../services/api.js';
 import { isYouTubeSource, getSongYoutubeId } from '../utils/youtube.js';
 import { getMediaUrl } from '../utils/media.js';
 import { isNativeAudioAvailable, nativeAudio } from '../services/nativeAudio.js';
+import {
+  activeCrossfadeSeconds, armFadeIn, attachAudioElement, canProcessSource, ensureAudioContext, fadeOutElement,
+  fxActive, isAttached, isFadeInArmed, runArmedFadeIn,
+} from './audioFxStore.js';
 
 type RepeatMode = 'off' | 'all' | 'one';
 
@@ -63,6 +67,31 @@ interface PlayerState {
 
 let audioElement: HTMLAudioElement | null = null;
 let nativeStateTimer: ReturnType<typeof setInterval> | null = null;
+// Crossfade: the song fading out keeps playing on a detached element while the next one starts.
+let outgoingElement: HTMLAudioElement | null = null;
+let crossfadedSongId: string | null = null;
+// playSong pauses before loading the next track; that one pause must not cut the fading song.
+let keepOutgoingOnNextPause = false;
+
+const detachHandlers = (el: HTMLAudioElement) => {
+  el.onplay = el.onplaying = el.onwaiting = el.onpause = el.ontimeupdate =
+    el.onloadedmetadata = el.ondurationchange = el.onprogress = el.onended = el.onerror = null;
+  el.removeAttribute('id');
+};
+
+const disposeElement = (el: HTMLAudioElement) => {
+  try {
+    el.pause();
+    el.removeAttribute('src');
+    el.load();
+    el.remove();
+  } catch {}
+};
+
+const stopOutgoing = () => {
+  if (outgoingElement) disposeElement(outgoingElement);
+  outgoingElement = null;
+};
 
 const getAudioElement = () => {
   if (typeof window === 'undefined' || typeof document === 'undefined') return null;
@@ -72,7 +101,8 @@ const getAudioElement = () => {
       audioElement = document.createElement('audio');
       audioElement.id = 'musicwave-html5-audio';
       audioElement.preload = 'auto';
-      audioElement.crossOrigin = 'anonymous';
+      // No crossorigin by default: most catalog hosts send no CORS headers and would refuse to load.
+      // playSong opts in per song when the EQ can process the source.
       (audioElement as any).preservesPitch = true;
       (audioElement as any).webkitPreservesPitch = true;
       (audioElement as any).mozPreservesPitch = true;
@@ -150,6 +180,33 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
     audio.ontimeupdate = () => {
       set({ currentTime: audio.currentTime });
+
+      // Start the next song a few seconds early and blend the two (Music Pro).
+      const fade = activeCrossfadeSeconds();
+      const { currentSong, queue, queueIndex, isShuffle, repeatMode } = get();
+      const hasNext = queue.length > 1 && repeatMode !== 'one' && (isShuffle || repeatMode === 'all' || queueIndex < queue.length - 1);
+      const dur = audio.duration;
+      if (
+        fade > 0 && hasNext && currentSong && crossfadedSongId !== currentSong.id &&
+        !isYouTubeSource(currentSong) && !audio.paused &&
+        dur > fade + 10 && dur - audio.currentTime <= fade
+      ) {
+        crossfadedSongId = currentSong.id;
+        stopOutgoing();
+        const outgoing = audio;
+        detachHandlers(outgoing);
+        outgoingElement = outgoing;
+        audioElement = null;
+        set({ audio: null });
+        fadeOutElement(outgoing, fade, () => {
+          if (outgoingElement === outgoing) outgoingElement = null;
+          disposeElement(outgoing);
+        });
+        armFadeIn(fade);
+        keepOutgoingOnNextPause = true;
+        get().nextSong();
+        keepOutgoingOnNextPause = false;
+      }
     };
 
     audio.onloadedmetadata = () => {
@@ -284,9 +341,28 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       }
 
       const currentRate = state.playbackRate || 1.0;
-      audio.src = getMediaUrl(song.audioUrl);
+      const url = getMediaUrl(song.audioUrl);
+      const useEq = fxActive() && canProcessSource(url);
+      // An element wired into Web Audio stays wired; it would play an unprocessable source as silence.
+      if (isAttached(audio) && !useEq) {
+        detachHandlers(audio);
+        disposeElement(audio);
+        audioElement = null;
+        get().initAudio();
+        audio = getAudioElement()!;
+      }
+      if (!isAttached(audio)) {
+        if (useEq) audio.crossOrigin = 'anonymous';
+        else audio.removeAttribute('crossorigin');
+      }
+      audio.src = url;
+      if (useEq) {
+        ensureAudioContext();
+        attachAudioElement(audio);
+      }
+      const targetVolume = state.isMuted ? 0 : state.volume;
       audio.currentTime = 0;
-      audio.volume = state.isMuted ? 0 : state.volume;
+      audio.volume = isFadeInArmed() ? 0 : targetVolume;
       audio.muted = state.isMuted;
       audio.playbackRate = currentRate;
       audio.defaultPlaybackRate = currentRate;
@@ -300,6 +376,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
           .then(() => {
             if (audio) {
               audio.playbackRate = currentRate;
+              runArmedFadeIn(audio, targetVolume);
             }
             set({ isPlaying: true, isBuffering: false, playbackError: null });
 
@@ -329,6 +406,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   },
 
   pause: () => {
+    if (keepOutgoingOnNextPause) keepOutgoingOnNextPause = false;
+    else stopOutgoing();
     const domAudio = getAudioElement();
     const stateAudio = get().audio;
     const audio = stateAudio || domAudio;

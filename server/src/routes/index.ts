@@ -10,6 +10,7 @@ import historyRoutes from './history.routes.js';
 import searchRoutes from './search.routes.js';
 import adminRoutes from './admin.routes.js';
 import mediaRoutes from './media.routes.js';
+import jamRoutes from './jam.routes.js';
 
 const router = Router();
 
@@ -24,6 +25,7 @@ router.use('/history', historyRoutes);
 router.use('/search', searchRoutes);
 router.use('/admin', adminRoutes);
 router.use('/media', mediaRoutes);
+router.use('/jam', jamRoutes);
 
 // Health check endpoint
 router.get('/health', (_req, res) => {

@@ -262,6 +262,22 @@ npm run start
 
 ## 12. Troubleshooting
 
+### AI genre classification
+
+Set `GEMINI_API_KEY` in `server/.env` (or the server deployment environment). Optional
+`GEMINI_MODEL` defaults to `gemini-flash-latest`. Keep the key on the server only.
+Sign in as an administrator and open Search → Khám phá thể loại → Phân loại bằng AI.
+The server processes up to 20 unassigned songs per request using title, artist and album
+metadata, and saves only catalog genres with confidence of at least 0.8. This does not
+analyze audio. Existing assignments and concurrent edits are preserved; uncertain songs
+stay unassigned. The interface reports progress and errors, and refreshes genre counts.
+Genre cards open the paginated catalog filtered by the selected genre.
+
+Endpoint: `POST /api/admin/genres/classify`, optional JSON `{ "afterId": "song-uuid" }`.
+Continue using `nextCursor` until null. Requests require an administrator session.
+Run classifier checks with `cd server && npx tsx --test src/scripts/genreClassification.test.ts`.
+
+
 1. **Port 5000 or 5173 already in use**:
    Change `PORT=5001` in `server/.env` and update the proxy port in `client/vite.config.ts`.
 2. **Switching to PostgreSQL**:

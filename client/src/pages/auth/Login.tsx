@@ -4,6 +4,7 @@ import { Radio, Lock, Mail, ArrowRight, ShieldCheck } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore.js';
 import { Button } from '../../components/common/Button.js';
 import { Input } from '../../components/common/Input.js';
+import { GoogleLoginButton } from '../../components/common/GoogleLoginButton.js';
 
 export const Login: React.FC = () => {
   const navigate = useNavigate();
@@ -104,6 +105,8 @@ export const Login: React.FC = () => {
               Đăng nhập
             </Button>
           </form>
+          <div className="text-center text-xs text-text-muted">hoặc</div>
+          <GoogleLoginButton />
 
           {/* Quick Demo Login Helpers */}
           <div className="pt-3 border-t border-white/5 space-y-2">

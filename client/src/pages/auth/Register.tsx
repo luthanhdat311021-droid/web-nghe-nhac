@@ -4,6 +4,7 @@ import { Radio, Lock, Mail, User, ArrowRight } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore.js';
 import { Button } from '../../components/common/Button.js';
 import { Input } from '../../components/common/Input.js';
+import { GoogleLoginButton } from '../../components/common/GoogleLoginButton.js';
 
 export const Register: React.FC = () => {
   const navigate = useNavigate();
@@ -119,6 +120,8 @@ export const Register: React.FC = () => {
               Đăng ký
             </Button>
           </form>
+          <div className="text-center text-xs text-text-muted">hoặc</div>
+          <GoogleLoginButton />
         </div>
 
         <p className="text-center text-xs text-text-muted">

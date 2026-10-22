@@ -10,7 +10,10 @@ import {
   X,
   Check,
   ListMusic,
+  Star,
+  Users,
 } from 'lucide-react';
+import { useJamStore } from '../../store/jamStore.js';
 import { useNavigate } from 'react-router-dom';
 import { Song } from '../../types/index.js';
 import { usePlayerStore } from '../../store/playerStore.js';
@@ -36,8 +39,24 @@ export const MobileActionSheet: React.FC<MobileActionSheetProps> = ({
   const { isAuthenticated } = useAuthStore();
   const [showAddToPlaylist, setShowAddToPlaylist] = useState(false);
   const [copied, setCopied] = useState(false);
+  const jamCode = useJamStore((s) => s.code);
+  const jamEnded = useJamStore((s) => s.ended);
+  const [jamNotice, setJamNotice] = useState('');
 
   if (!song) return null;
+
+  const handleAddToJam = async () => {
+    try {
+      await useJamStore.getState().addSong(song.id);
+      setJamNotice('Đã thêm vào phòng!');
+    } catch (err: any) {
+      setJamNotice(err.response?.data?.message || 'Không thêm được bài hát.');
+    }
+    setTimeout(() => {
+      setJamNotice('');
+      onClose();
+    }, 1200);
+  };
 
   const handlePlayNow = () => {
     playSong(song, queueContext);
@@ -93,6 +112,12 @@ export const MobileActionSheet: React.FC<MobileActionSheetProps> = ({
     } catch {
       onClose();
     }
+  };
+
+  const handleGoToDetail = () => {
+    usePlayerStore.getState().closeFullScreenPlayer();
+    navigate(`/song/${song.id}`);
+    onClose();
   };
 
   const handleGoToArtist = () => {
@@ -175,6 +200,28 @@ export const MobileActionSheet: React.FC<MobileActionSheetProps> = ({
                     <ListMusic className="w-4 h-4" />
                   </div>
                   <span>Phát tiếp theo</span>
+                </button>
+
+                {jamCode && !jamEnded && (
+                  <button
+                    onClick={handleAddToJam}
+                    className="w-full flex items-center gap-3.5 px-3 py-3 rounded-xl text-xs font-semibold text-white hover:bg-white/[0.06] active:bg-white/[0.1] transition-colors text-left touch-target"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center flex-shrink-0 text-emerald-300">
+                      {jamNotice ? <Check className="w-4 h-4" /> : <Users className="w-4 h-4" />}
+                    </div>
+                    <span>{jamNotice || 'Thêm vào phòng nghe chung'}</span>
+                  </button>
+                )}
+
+                <button
+                  onClick={handleGoToDetail}
+                  className="w-full flex items-center gap-3.5 px-3 py-3 rounded-xl text-xs font-semibold text-white hover:bg-white/[0.06] active:bg-white/[0.1] transition-colors text-left touch-target"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center flex-shrink-0 text-amber-300">
+                    <Star className="w-4 h-4" />
+                  </div>
+                  <span>Xem chi tiết & đánh giá</span>
                 </button>
 
                 <button

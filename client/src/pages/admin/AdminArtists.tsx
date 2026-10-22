@@ -46,7 +46,7 @@ export const AdminArtists: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('Delete artist? All songs linked to this artist will be deleted.')) return;
+    if (!window.confirm('Xóa nghệ sĩ này? Tất cả bài hát liên kết với nghệ sĩ cũng sẽ bị xóa.')) return;
     try {
       await adminService.deleteArtist(id);
       fetchArtists();
@@ -82,7 +82,7 @@ export const AdminArtists: React.FC = () => {
           leftIcon={<Plus className="w-3.5 h-3.5" />}
           className="self-start sm:self-auto"
         >
-          Add artist
+          Thêm nghệ sĩ
         </Button>
       </div>
 
@@ -135,7 +135,7 @@ export const AdminArtists: React.FC = () => {
                   leftIcon={<Edit className="w-3.5 h-3.5" />}
                   className="flex-1"
                 >
-                  Edit
+                  Sửa
                 </Button>
                 <Button
                   onClick={() => handleDelete(artist.id)}
@@ -144,7 +144,7 @@ export const AdminArtists: React.FC = () => {
                   leftIcon={<Trash2 className="w-3.5 h-3.5" />}
                   className="flex-1"
                 >
-                  Delete
+                  Xóa
                 </Button>
               </div>
             </div>
@@ -206,7 +206,7 @@ export const AdminArtists: React.FC = () => {
                           size="sm"
                           leftIcon={<Edit className="w-3.5 h-3.5" />}
                         >
-                          Edit
+                          Sửa
                         </Button>
                         <Button
                           onClick={() => handleDelete(artist.id)}
@@ -214,7 +214,7 @@ export const AdminArtists: React.FC = () => {
                           size="sm"
                           leftIcon={<Trash2 className="w-3.5 h-3.5" />}
                         >
-                          Delete
+                          Xóa
                         </Button>
                       </div>
                     </td>
@@ -239,7 +239,7 @@ export const AdminArtists: React.FC = () => {
               disabled={page <= 1}
               onClick={() => setPage((p) => p - 1)}
             >
-              Prev
+              Trước
             </Button>
             <Button
               variant="secondary"
@@ -247,7 +247,7 @@ export const AdminArtists: React.FC = () => {
               disabled={page >= totalPages}
               onClick={() => setPage((p) => p + 1)}
             >
-              Next
+              Sau
             </Button>
           </div>
         </div>
