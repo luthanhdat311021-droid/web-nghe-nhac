@@ -3,6 +3,7 @@ import { Check, Crown, Eye, Gamepad2, RotateCcw, Timer, Trophy, X } from 'lucide
 import { useJamStore } from '../../store/jamStore.js';
 import { useAuthStore } from '../../store/authStore.js';
 import { Button } from '../common/Button.js';
+import { QuizSongPicker } from './QuizSongPicker.js';
 
 const ROUND_SECONDS = 30; // matches QUIZ_ROUND_MS on the server
 
@@ -70,7 +71,7 @@ export const QuizPanel: React.FC = () => {
       {!quiz && (
         <p className="text-sm text-text-secondary">
           {isHost
-            ? 'Bạn là người dẫn: mỗi vòng phát một bài bí ẩn cho cả phòng, mọi người chọn đúng tên bài trong 30 giây. Trả lời càng nhanh càng nhiều điểm.'
+            ? 'Bạn là người dẫn: chọn một bài bí ẩn để phát cho cả phòng, mọi người chọn đúng tên bài trong 30 giây. Trả lời càng nhanh càng nhiều điểm.'
             : 'Chờ chủ phòng bắt đầu trò chơi. Khi nhạc vang lên, chọn đúng tên bài hát — càng nhanh càng nhiều điểm!'}
         </p>
       )}
@@ -123,15 +124,15 @@ export const QuizPanel: React.FC = () => {
       )}
       {notice && <p className="text-xs text-amber-200" role="status">{notice}</p>}
 
+      {isHost && !quiz?.active && (
+        <QuizSongPicker round={(quiz?.round ?? 0) + 1} busy={busy} onStart={(songId) => run(() => startQuiz(songId))} />
+      )}
+
       {isHost && (
         <div className="flex flex-wrap gap-2">
-          {quiz?.active ? (
+          {quiz?.active && (
             <Button variant="secondary" size="sm" disabled={busy} onClick={() => run(revealQuiz)} leftIcon={<Eye className="w-4 h-4" />}>
               Công bố đáp án
-            </Button>
-          ) : (
-            <Button variant="primary" size="sm" disabled={busy} onClick={() => run(startQuiz)} leftIcon={<Gamepad2 className="w-4 h-4" />}>
-              {quiz ? `Vòng ${quiz.round + 1}` : 'Bắt đầu đoán bài'}
             </Button>
           )}
           {quiz && (

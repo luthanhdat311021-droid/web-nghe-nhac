@@ -68,7 +68,7 @@ interface JamState {
   error: string | null;
   quiz: JamQuizState | null;
   serverOffsetMs: number; // server clock minus local clock, for the quiz countdown
-  startQuiz: () => Promise<void>;
+  startQuiz: (songId?: string) => Promise<void>; // no song: the server draws one at random
   answerQuiz: (songId: string) => Promise<{ correct: boolean; points: number }>;
   revealQuiz: () => Promise<void>;
   resetQuiz: () => Promise<void>;
@@ -91,10 +91,10 @@ export const useJamStore = create<JamState>((set, get) => ({
   code: readSavedCode(),
   ...empty,
 
-  startQuiz: async () => {
+  startQuiz: async (songId) => {
     const code = get().code;
     if (!code) return;
-    const res = await api.post(`/jam/${code}/quiz/start`);
+    const res = await api.post(`/jam/${code}/quiz/start`, songId ? { songId } : {});
     const song = res.data.data.song as Song;
     // The host's player is what the room hears; JamSync publishes it to every guest.
     usePlayerStore.getState().playSong(song, [song]);

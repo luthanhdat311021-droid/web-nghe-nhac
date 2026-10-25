@@ -133,6 +133,21 @@ test('quiz: only the host starts rounds; guests see options but not the answer',
   assert.equal((await invoke('/:code', 'get', 'host')).body.data.quiz.correctId, room.quizSongId);
 });
 
+test('quiz: the host can choose the song; decoys are still drawn from the catalog', async () => {
+  reset();
+  const picked = await invoke('/:code/quiz/start', 'post', 'host', { body: { songId: 's4' } });
+  assert.equal(picked.status, 200);
+  assert.equal(room.quizSongId, 's4');
+  assert.equal(picked.body.data.song.id, 's4');
+  assert.ok(room.quizOptionIds.includes('s4'));
+  assert.equal(new Set(room.quizOptionIds).size, QUIZ_OPTIONS);
+  assert.equal((await invoke('/:code/quiz/start', 'post', 'host', { body: { songId: 'missing' } })).status, 404);
+  assert.equal((await invoke('/:code/quiz/start', 'post', 'host', { body: { songId: 42 } })).status, 400);
+  assert.deepEqual([room.quizSongId, room.quizRevealed], ['s4', false], 'a refused pick leaves the running round alone');
+  // Choosing the same song again is allowed (the host decides).
+  assert.equal((await invoke('/:code/quiz/start', 'post', 'host', { body: { songId: 's4' } })).status, 200);
+});
+
 test('quiz: one answer per round, faster correct answers score more, round reveals when all answered', async () => {
   reset();
   await invoke('/:code', 'get', 'a');

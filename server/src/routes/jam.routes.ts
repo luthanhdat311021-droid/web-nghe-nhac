@@ -230,11 +230,17 @@ router.post('/:code/quiz/start', requireAuth, wrap(async (req, res) => {
   const room = await openRoom(req.params.code);
   if (!room) return sendError(res, 'Phòng nghe chung đã kết thúc.', 404);
   if (room.hostId !== req.user!.userId) return sendError(res, 'Chỉ chủ phòng mới bắt đầu được trò chơi.', 403);
-  await revealQuiz(room);
+  const chosenId = req.body?.songId === undefined ? null : z.string().min(1).max(64).safeParse(req.body.songId);
+  if (chosenId && !chosenId.success) return sendError(res, 'Bài hát không hợp lệ.', 400);
+  const picked = chosenId?.success
+    ? await prisma.song.findUnique({ where: { id: chosenId.data }, select: { id: true } })
+    : null;
+  if (chosenId?.success && !picked) return sendError(res, 'Bài hát không tồn tại.', 404);
   const catalog = await prisma.song.findMany({ select: { id: true }, take: 1000 });
   if (catalog.length < QUIZ_OPTIONS) return sendError(res, `Cần ít nhất ${QUIZ_OPTIONS} bài hát để chơi.`, 400);
-  // Avoid asking the same song twice in a row.
-  const [answer] = pickRandom(catalog.filter((s) => s.id !== room.quizSongId), 1);
+  await revealQuiz(room);
+  // The host may pick the song; otherwise draw one, avoiding the same song twice in a row.
+  const answer = picked ?? pickRandom(catalog.filter((s) => s.id !== room.quizSongId), 1)[0];
   const decoys = pickRandom(catalog.filter((s) => s.id !== answer.id), QUIZ_OPTIONS - 1);
   const optionIds = pickRandom([answer, ...decoys], QUIZ_OPTIONS).map((s) => s.id);
   const round = room.quizRound + 1;
