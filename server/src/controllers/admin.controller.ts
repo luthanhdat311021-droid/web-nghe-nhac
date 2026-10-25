@@ -19,6 +19,44 @@ import {
   isOwnStorageUrl,
 } from '../services/storage.js';
 import { isAllowedMedia } from '../middleware/upload.js';
+import { findLyrics } from '../services/lyricsLookup.js';
+
+/** Fills in lyrics for a song that has none, from LRCLIB. Never fails the caller: returns whether lyrics were saved. */
+const attachLyricsIfFound = async (songId: string, title: string, artistName: string, duration?: number | null) => {
+  try {
+    const match = await findLyrics({ title, artistName, duration });
+    if (!match) return false;
+    await prisma.lyrics.upsert({
+      where: { songId },
+      create: { songId, plainLyrics: match.plainLyrics, syncedLyrics: match.syncedLyrics, isSynced: !!match.syncedLyrics },
+      update: { plainLyrics: match.plainLyrics, syncedLyrics: match.syncedLyrics, isSynced: !!match.syncedLyrics },
+    });
+    return true;
+  } catch (err) {
+    console.warn('[Lyrics] attach failed:', err);
+    return false;
+  }
+};
+
+/** Admin: preview lyrics for a title/artist without saving (the song form fills its fields with it). */
+export const lookupLyrics = async (req: AuthenticatedRequest, res: Response) => {
+  const title = String(req.query.title || '').trim().slice(0, 300);
+  const artistName = String(req.query.artist || '').trim().slice(0, 300);
+  if (!title) return sendError(res, 'Cần tên bài hát để tìm lời.', 400);
+  const match = await findLyrics({ title, artistName, duration: Number(req.query.duration) || undefined });
+  return match ? sendSuccess(res, match) : sendError(res, 'Không tìm thấy lời phù hợp cho bài này.', 404);
+};
+
+/** Admin: find and save lyrics for an existing song. */
+export const autoLyricsForSong = async (req: AuthenticatedRequest, res: Response) => {
+  const song = await prisma.song.findUnique({ where: { id: req.params.id }, include: { artist: { select: { name: true } } } });
+  if (!song) return sendError(res, 'Không tìm thấy bài hát.', 404);
+  const saved = await attachLyricsIfFound(song.id, song.title, song.artist?.name || '', song.duration);
+  if (!saved) return sendError(res, 'Không tìm thấy lời phù hợp cho bài này.', 404);
+  appCache.invalidatePrefix('songs:');
+  const lyrics = await prisma.lyrics.findUnique({ where: { songId: song.id } });
+  return sendSuccess(res, lyrics, 'Đã tìm và lưu lời bài hát.');
+};
 
 // Dashboard KPIs and analytics
 export const getDashboardStats = async (_req: AuthenticatedRequest, res: Response) => {
@@ -343,6 +381,10 @@ export const createSong = async (req: AuthenticatedRequest, res: Response) => {
         lyrics: true,
       },
     });
+
+    if (!validated.lyrics && !validated.syncedLyrics) {
+      await attachLyricsIfFound(song.id, song.title, song.artist?.name || '', song.duration);
+    }
 
     appCache.invalidatePrefix('songs:');
     appCache.invalidatePrefix('artists:');
@@ -1192,6 +1234,8 @@ export const importSingleSong = async (req: AuthenticatedRequest, res: Response)
       },
     });
 
+    const lyricsFound = await attachLyricsIfFound(createdSong.id, createdSong.title, createdSong.artist?.name || artistName, createdSong.duration);
+
     appCache.invalidatePrefix('songs:');
     appCache.invalidatePrefix('artists:');
     appCache.invalidatePrefix('albums:');
@@ -1205,6 +1249,7 @@ export const importSingleSong = async (req: AuthenticatedRequest, res: Response)
         status: 'SUCCESS',
         message: `Đã thêm bài hát "${title}" thành công.`,
         song: createdSong,
+        lyricsFound,
       },
       'Song imported successfully',
       201

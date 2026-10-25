@@ -3,7 +3,9 @@ import {
   checkSongDuplicates,
   createAlbum,
   createArtist,
+  autoLyricsForSong,
   createMediaUploadUrl,
+  lookupLyrics,
   createSong,
   deleteAlbum,
   deleteArtist,
@@ -43,6 +45,8 @@ router.get('/youtube-info', getYoutubeInfo);
 // ==================== MUSIC LIBRARY & BULK IMPORT ====================
 router.post('/songs/check-duplicates', checkSongDuplicates);
 router.post('/media/upload-url', uploadRateLimiter, createMediaUploadUrl);
+router.get('/lyrics/lookup', searchRateLimiter, lookupLyrics);
+router.post('/songs/:id/auto-lyrics', searchRateLimiter, autoLyricsForSong);
 router.post(
   '/songs/import-song',
   upload.fields([

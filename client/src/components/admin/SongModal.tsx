@@ -10,6 +10,7 @@ import {
   AlertCircle,
   Plus,
   UserPlus,
+  Search,
 } from 'lucide-react';
 import { Song, Artist, Album, Genre } from '../../types/index.js';
 import { adminService, uploadToStorage } from '../../services/admin.service.js';
@@ -169,6 +170,8 @@ export const SongModal: React.FC<SongModalProps> = ({
   const [genres, setGenres] = useState<Genre[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('');
+  const [isFindingLyrics, setIsFindingLyrics] = useState(false);
+  const [lyricsNote, setLyricsNote] = useState('');
   const [isFetchingMeta, setIsFetchingMeta] = useState(false);
   const [metaFeedback, setMetaFeedback] = useState<string>('');
 
@@ -239,6 +242,7 @@ export const SongModal: React.FC<SongModalProps> = ({
     setLyrics('');
     setSyncedLyrics('');
     setMetaFeedback('');
+    setLyricsNote('');
     setShowQuickAddArtist(false);
     setNewArtistName('');
     setSuggestedArtistName('');
@@ -385,6 +389,25 @@ export const SongModal: React.FC<SongModalProps> = ({
       } catch {
         setMetaFeedback(`Nhận diện từ file: "${cleanName}"`);
       }
+    }
+  };
+
+  const handleFindLyrics = async () => {
+    setIsFindingLyrics(true);
+    setLyricsNote('');
+    try {
+      const found = await adminService.lookupLyrics({
+        title: title.trim(),
+        artist: artists.find((a) => a.id === artistId)?.name || suggestedArtistName || '',
+        duration: parseDurationToSeconds(duration),
+      });
+      setLyrics(found.plainLyrics);
+      setSyncedLyrics(found.syncedLyrics || '');
+      setLyricsNote(`Đã điền lời "${found.source.trackName}" – ${found.source.artistName}${found.syncedLyrics ? ' (có lời chạy theo thời gian)' : ''}. Kiểm tra lại trước khi lưu.`);
+    } catch (err: any) {
+      setLyricsNote(err.response?.data?.message || 'Không tìm được lời bài hát.');
+    } finally {
+      setIsFindingLyrics(false);
     }
   };
 
@@ -881,9 +904,21 @@ export const SongModal: React.FC<SongModalProps> = ({
         {/* Lyrics */}
         <div className="space-y-2">
           <div className="space-y-1">
-            <label className="block text-xs font-semibold uppercase tracking-wider text-text-secondary">
-              Lời bài hát (Văn bản thuần)
-            </label>
+            <div className="flex items-center justify-between gap-2">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-text-secondary">
+                Lời bài hát (Văn bản thuần)
+              </label>
+              <button
+                type="button"
+                onClick={handleFindLyrics}
+                disabled={isFindingLyrics || !title.trim()}
+                className="text-[11px] font-semibold text-amber-300 hover:text-amber-200 disabled:opacity-50 flex items-center gap-1"
+              >
+                <Search className="w-3.5 h-3.5" />
+                {isFindingLyrics ? 'Đang tìm…' : 'Tự tìm lời'}
+              </button>
+            </div>
+            {lyricsNote && <p className="text-[11px] text-text-secondary">{lyricsNote}</p>}
             <textarea
               value={lyrics}
               onChange={(e) => setLyrics(e.target.value)}

@@ -1,12 +1,15 @@
 import React, { useEffect, useRef, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { X, Music2, Play, Pause, Minus, Plus, Loader2 } from 'lucide-react';
+import { X, Music2, Play, Pause, Minus, Plus, Loader2, Search } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { usePlayerStore, useCurrentSong, useIsPlaying } from '../../store/playerStore.js';
 import { useQuizMask } from '../../store/jamStore.js';
 import { parseSyncedLyrics } from '../../utils/lyrics.js';
 import { songService } from '../../services/song.service.js';
-import { QUERY_KEYS } from '../../services/queryClient.js';
+import { QUERY_KEYS, queryClient } from '../../services/queryClient.js';
+import { adminService } from '../../services/admin.service.js';
+import { useAuthStore } from '../../store/authStore.js';
+import { Lyrics } from '../../types/index.js';
 import { formatDuration } from '../../utils/format.js';
 
 // A line with no successor (or a long instrumental gap) is considered sung for at most this long.
@@ -58,7 +61,24 @@ const KaraokeBody: React.FC = () => {
     enabled: currentSong.lyrics === undefined,
     staleTime: 1000 * 60 * 5,
   });
-  const lyrics = currentSong.lyrics ?? detail?.lyrics;
+  const [foundLyrics, setFoundLyrics] = useState<Lyrics | null>(null);
+  const lyrics = foundLyrics || (currentSong.lyrics ?? detail?.lyrics);
+  const isAdmin = useAuthStore((s) => s.user?.role === 'ADMIN');
+  const [searching, setSearching] = useState(false);
+  const [searchNote, setSearchNote] = useState('');
+  const autoFindLyrics = async () => {
+    setSearching(true);
+    setSearchNote('');
+    try {
+      const saved = await adminService.autoLyrics(currentSong.id);
+      setFoundLyrics(saved);
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.songDetail(currentSong.id) });
+    } catch (err: any) {
+      setSearchNote(err.response?.data?.message || 'Không tìm được lời bài hát.');
+    } finally {
+      setSearching(false);
+    }
+  };
 
   const [offset, setOffset] = useState(0);
   useEffect(() => setOffset(0), [currentSong.id]);
@@ -118,6 +138,19 @@ const KaraokeBody: React.FC = () => {
             </div>
             <h4 className="text-lg font-semibold text-white">Chưa có lời bài hát cho bài này.</h4>
             <p className="text-xs text-text-muted">Thưởng thức giai điệu và âm nhạc!</p>
+            {isAdmin && (
+              <div className="pt-2 space-y-2">
+                <button
+                  onClick={autoFindLyrics}
+                  disabled={searching}
+                  className="inline-flex items-center gap-2 rounded-full bg-white text-black px-4 py-2 text-xs font-bold disabled:opacity-60 active:scale-95 transition-transform"
+                >
+                  {searching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
+                  {searching ? 'Đang tìm lời…' : 'Tìm lời tự động'}
+                </button>
+                {searchNote && <p className="text-xs text-amber-200">{searchNote}</p>}
+              </div>
+            )}
           </div>
         ) : lines.length > 0 ? (
           <div className="max-w-3xl w-full space-y-5 md:space-y-7 text-left py-[40vh]">

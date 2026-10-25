@@ -7,6 +7,7 @@ import {
   DuplicateCheckResult,
   Genre,
   ImportBatch,
+  Lyrics,
   Song,
   User,
 } from '../types/index.js';
@@ -113,6 +114,19 @@ export const adminService = {
     const res = await api.get<ApiResponse<{ items: ImportBatch[]; pagination: any }>>('/admin/songs/import-history', {
       params: { page, limit },
     });
+    return res.data.data;
+  },
+
+  async lookupLyrics(params: { title: string; artist?: string; duration?: number }) {
+    const res = await api.get<ApiResponse<{ plainLyrics: string; syncedLyrics: string | null; source: { trackName: string; artistName: string } }>>(
+      '/admin/lyrics/lookup',
+      { params }
+    );
+    return res.data.data;
+  },
+
+  async autoLyrics(songId: string) {
+    const res = await api.post<ApiResponse<Lyrics>>(`/admin/songs/${songId}/auto-lyrics`);
     return res.data.data;
   },
 
