@@ -31,6 +31,17 @@ const ALLOWED_MIME_TYPES: Record<string, string[]> = {
   '.webp': ['image/webp'],
 };
 
+const AUDIO_EXTS = ['.mp3', '.wav', '.ogg', '.m4a'];
+
+/** Same extension and MIME rules as multipart uploads, for files the browser sends to storage itself. */
+export const isAllowedMedia = (fileName: string, mime: string, kind: 'audio' | 'cover') => {
+  const ext = path.extname(fileName.replace(/[\0\x00-\x1f\x7f/\\]/g, '')).toLowerCase();
+  const allowed = ALLOWED_MIME_TYPES[ext];
+  if (!allowed || AUDIO_EXTS.includes(ext) !== (kind === 'audio')) return null;
+  const m = mime.toLowerCase();
+  return allowed.some((a) => m.includes(a) || a.includes(m)) || m === 'application/octet-stream' || m === '' ? ext : null;
+};
+
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => {
     cb(null, uploadDir);

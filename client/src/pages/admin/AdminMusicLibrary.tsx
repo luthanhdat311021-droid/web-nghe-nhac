@@ -31,7 +31,7 @@ import {
 } from 'lucide-react';
 import { Song, Genre, Artist, ImportBatch, DuplicateCheckResult } from '../../types/index.js';
 import { songService } from '../../services/song.service.js';
-import { adminService } from '../../services/admin.service.js';
+import { adminService, uploadToStorage } from '../../services/admin.service.js';
 import { artistService } from '../../services/artist.service.js';
 import { usePlayerStore, useIsSongPlaying, useIsSongCurrent } from '../../store/playerStore.js';
 import { parseMp3Metadata, ParsedAudioMetadata } from '../../utils/id3Parser.js';
@@ -43,6 +43,34 @@ import { ReplaceCoverModal } from '../../components/admin/ReplaceCoverModal.js';
 import { queryClient } from '../../services/queryClient.js';
 
 type TabType = 'library' | 'upload' | 'history';
+
+/** Import request for one queued file: the audio and cover go straight to storage, the server gets their URLs. */
+const buildImportForm = async (item: ParsedAudioMetadata) => {
+  const formData = new FormData();
+  const meta = { title: item.title.trim(), artistName: item.artist.trim(), albumTitle: item.album?.trim() || undefined };
+  // A duplicate that will be skipped needs no upload at all.
+  const skipping = item.duplicateStatus === 'DUPLICATE' && (item.duplicateAction || 'skip') === 'skip';
+  if (!skipping) {
+    const audioUrl = await uploadToStorage(item.file, 'audio', meta);
+    if (audioUrl) formData.append('audioUrl', audioUrl);
+    else formData.append('audioFile', item.file);
+    if (item.coverFile) {
+      const coverUrl = await uploadToStorage(item.coverFile, 'cover', meta);
+      if (coverUrl) formData.append('coverUrl', coverUrl);
+      else formData.append('coverFile', item.coverFile);
+    }
+  }
+  formData.append('title', meta.title);
+  formData.append('artistName', meta.artistName);
+  if (item.album) formData.append('albumTitle', item.album.trim());
+  if (item.genre) formData.append('genreName', item.genre.trim());
+  formData.append('duration', item.duration.toString());
+  if (item.releaseYear) formData.append('releaseYear', item.releaseYear.toString());
+  formData.append('trackNumber', item.trackNumber.toString());
+  formData.append('duplicateAction', item.duplicateAction || 'skip');
+  if (item.existingSongId) formData.append('existingSongId', item.existingSongId);
+  return formData;
+};
 
 interface BatchUploadItemState {
   item: ParsedAudioMetadata;
@@ -352,30 +380,7 @@ export const AdminMusicLibrary: React.FC = () => {
         });
 
         try {
-          const formData = new FormData();
-          formData.append('audioFile', queueItem.file);
-          if (queueItem.coverFile) {
-            formData.append('coverFile', queueItem.coverFile);
-          }
-          formData.append('title', queueItem.title.trim());
-          formData.append('artistName', queueItem.artist.trim());
-          if (queueItem.album) {
-            formData.append('albumTitle', queueItem.album.trim());
-          }
-          if (queueItem.genre) {
-            formData.append('genreName', queueItem.genre.trim());
-          }
-          formData.append('duration', queueItem.duration.toString());
-          if (queueItem.releaseYear) {
-            formData.append('releaseYear', queueItem.releaseYear.toString());
-          }
-          formData.append('trackNumber', queueItem.trackNumber.toString());
-          formData.append('duplicateAction', queueItem.duplicateAction || 'skip');
-          if (queueItem.existingSongId) {
-            formData.append('existingSongId', queueItem.existingSongId);
-          }
-
-          const res = await adminService.importSingleSong(formData);
+          const res = await adminService.importSingleSong(await buildImportForm(queueItem));
 
           if (res.data?.status === 'SKIPPED') {
             skippedCount++;
@@ -481,20 +486,7 @@ export const AdminMusicLibrary: React.FC = () => {
     });
 
     try {
-      const queueItem = target.item;
-      const formData = new FormData();
-      formData.append('audioFile', queueItem.file);
-      if (queueItem.coverFile) {
-        formData.append('coverFile', queueItem.coverFile);
-      }
-      formData.append('title', queueItem.title.trim());
-      formData.append('artistName', queueItem.artist.trim());
-      if (queueItem.album) formData.append('albumTitle', queueItem.album.trim());
-      if (queueItem.genre) formData.append('genreName', queueItem.genre.trim());
-      formData.append('duration', queueItem.duration.toString());
-      formData.append('duplicateAction', queueItem.duplicateAction || 'skip');
-
-      const res = await adminService.importSingleSong(formData);
+      const res = await adminService.importSingleSong(await buildImportForm(target.item));
 
       setBatchItemsState((prev) => {
         const next = [...prev];
@@ -507,7 +499,7 @@ export const AdminMusicLibrary: React.FC = () => {
       setBatchItemsState((prev) => {
         const next = [...prev];
         next[index].status = 'FAILED';
-        next[index].errorMessage = err.response?.data?.message || 'Thử lại thất bại.';
+        next[index].errorMessage = err.response?.data?.message || err.message || 'Thử lại thất bại.';
         return next;
       });
     }

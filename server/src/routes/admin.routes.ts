@@ -3,6 +3,7 @@ import {
   checkSongDuplicates,
   createAlbum,
   createArtist,
+  createMediaUploadUrl,
   createSong,
   deleteAlbum,
   deleteArtist,
@@ -41,6 +42,7 @@ router.get('/youtube-info', getYoutubeInfo);
 
 // ==================== MUSIC LIBRARY & BULK IMPORT ====================
 router.post('/songs/check-duplicates', checkSongDuplicates);
+router.post('/media/upload-url', uploadRateLimiter, createMediaUploadUrl);
 router.post(
   '/songs/import-song',
   upload.fields([

@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { X, Upload, Music2, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { Song } from '../../types/index.js';
-import { adminService } from '../../services/admin.service.js';
+import { adminService, uploadToStorage } from '../../services/admin.service.js';
 import { probeAudioDuration } from '../../utils/id3Parser.js';
 import { formatDuration } from '../../utils/format.js';
 import { Button } from '../common/Button.js';
@@ -68,7 +68,9 @@ export const ReplaceAudioModal: React.FC<ReplaceAudioModalProps> = ({
       setLoading(true);
       setError(null);
       const formData = new FormData();
-      formData.append('audioFile', file);
+      const audioUrl = await uploadToStorage(file, 'audio', { title: song.title, artistName: song.artist?.name, albumTitle: song.album?.title });
+      if (audioUrl) formData.append('audioUrl', audioUrl);
+      else formData.append('audioFile', file);
       if (duration) {
         formData.append('duration', duration.toString());
       }
@@ -77,7 +79,7 @@ export const ReplaceAudioModal: React.FC<ReplaceAudioModalProps> = ({
       onSuccess();
       handleClose();
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Không thể thay thế file MP3. Vui lòng thử lại.');
+      setError(err.response?.data?.message || err.message || 'Không thể thay thế file MP3. Vui lòng thử lại.');
     } finally {
       setLoading(false);
     }

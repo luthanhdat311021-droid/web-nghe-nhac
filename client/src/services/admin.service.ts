@@ -11,6 +11,40 @@ import {
   User,
 } from '../types/index.js';
 
+// Vercel rejects request bodies over 4.5 MB (HTTP 413), so files go from the browser straight to Supabase Storage.
+const SERVER_UPLOAD_LIMIT = 4 * 1024 * 1024;
+
+/**
+ * Puts a file into Supabase Storage through a one-time signed URL and returns its public URL.
+ * Returns null when storage is unavailable and the file is small enough to send through the server instead.
+ */
+export const uploadToStorage = async (
+  file: File,
+  kind: 'audio' | 'cover',
+  meta: { title?: string; artistName?: string; albumTitle?: string } = {}
+): Promise<string | null> => {
+  let signed: { uploadUrl: string; publicUrl: string };
+  try {
+    const res = await api.post<ApiResponse<{ uploadUrl: string; publicUrl: string }>>('/admin/media/upload-url', {
+      kind, fileName: file.name, contentType: file.type, ...meta,
+    });
+    signed = res.data.data;
+  } catch (err: any) {
+    if (err.response?.status === 503 && file.size <= SERVER_UPLOAD_LIMIT) return null;
+    if (err.response?.status === 503) {
+      throw new Error(`Tệp ${(file.size / 1048576).toFixed(1)} MB vượt giới hạn 4,5 MB của máy chủ và kho Supabase Storage chưa sẵn sàng.`);
+    }
+    throw err;
+  }
+  const put = await fetch(signed.uploadUrl, {
+    method: 'PUT',
+    headers: { 'content-type': file.type || 'application/octet-stream', 'x-upsert': 'true' },
+    body: file,
+  });
+  if (!put.ok) throw new Error(`Tải tệp lên kho lưu trữ thất bại (${put.status}).`);
+  return signed.publicUrl;
+};
+
 export const adminService = {
   async getStats() {
     const res = await api.get<ApiResponse<DashboardStats>>('/admin/stats');

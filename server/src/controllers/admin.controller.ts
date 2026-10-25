@@ -15,7 +15,10 @@ import {
   deletePublicMedia,
   buildSafeAudioPath,
   sanitizeSlug,
+  createSignedUpload,
+  isOwnStorageUrl,
 } from '../services/storage.js';
+import { isAllowedMedia } from '../middleware/upload.js';
 
 // Dashboard KPIs and analytics
 export const getDashboardStats = async (_req: AuthenticatedRequest, res: Response) => {
@@ -927,6 +930,35 @@ export const checkSongDuplicates = async (req: AuthenticatedRequest, res: Respon
  * Imports a single MP3 song with automatic Artist & Album deduplication,
  * file storage upload, duplicate resolution (skip, replace, keep), and DB save.
  */
+const uploadUrlSchema = z.object({
+  kind: z.enum(['audio', 'cover']),
+  fileName: z.string().min(1).max(300),
+  contentType: z.string().max(100).default(''),
+  title: z.string().max(300).optional(),
+  artistName: z.string().max(300).optional(),
+  albumTitle: z.string().max(300).optional(),
+});
+
+/** One-time URL for the browser to put a file straight into Supabase Storage (bypasses Vercel's 4.5 MB limit). */
+export const createMediaUploadUrl = async (req: AuthenticatedRequest, res: Response) => {
+  const parsed = uploadUrlSchema.safeParse(req.body);
+  if (!parsed.success) return sendError(res, 'Thông tin tệp không hợp lệ.', 400);
+  const { kind, fileName, contentType, title, artistName, albumTitle } = parsed.data;
+  const ext = isAllowedMedia(fileName, contentType, kind);
+  if (!ext) {
+    return sendError(res, kind === 'audio'
+      ? 'Chỉ chấp nhận tệp âm thanh MP3, WAV, OGG, M4A.'
+      : 'Chỉ chấp nhận ảnh JPG, PNG, WEBP.', 400);
+  }
+  const songTitle = title || fileName.replace(/\.[^/.]+$/, '');
+  const objectPath = kind === 'audio'
+    ? buildSafeAudioPath(artistName || 'unknown-artist', albumTitle, songTitle, ext)
+    : `covers/${sanitizeSlug(artistName || 'unknown-artist')}/${sanitizeSlug(songTitle)}-${Date.now()}${ext}`;
+  const signed = await createSignedUpload(objectPath);
+  if (!signed) return sendError(res, 'Kho lưu trữ Supabase chưa sẵn sàng (kiểm tra SUPABASE_SERVICE_ROLE_KEY).', 503);
+  return sendSuccess(res, signed);
+};
+
 export const importSingleSong = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user?.userId;
@@ -935,6 +967,9 @@ export const importSingleSong = async (req: AuthenticatedRequest, res: Response)
     const coverFile = files?.coverFile?.[0];
 
     const body = { ...req.body };
+    // Files uploaded by the browser arrive as URLs; only accept ones inside our own bucket.
+    if (body.audioUrl && !isOwnStorageUrl(body.audioUrl)) return sendError(res, 'Audio URL không hợp lệ.', 400);
+    if (body.coverUrl && !isOwnStorageUrl(body.coverUrl)) return sendError(res, 'Cover URL không hợp lệ.', 400);
     const rawTitle = (body.title || '').trim();
     const rawArtistName = (body.artistName || body.artist || 'Unknown Artist').trim().replace(/\s+/g, ' ');
     const rawAlbumTitle = (body.albumTitle || body.album || '').trim().replace(/\s+/g, ' ');
@@ -942,9 +977,9 @@ export const importSingleSong = async (req: AuthenticatedRequest, res: Response)
     const duration = parseInt(body.duration, 10) || 180;
     const duplicateAction = (body.duplicateAction || 'skip').toLowerCase(); // 'skip' | 'replace' | 'keep'
 
-    if (!audioFile && !body.audioUrl) {
-      return sendError(res, 'File MP3 hoặc Audio URL là bắt buộc.', 400);
-    }
+    // A duplicate the client expects to skip may arrive without audio; the requirement is checked once we know.
+    const requireAudio = () => (!audioFile && !body.audioUrl ? sendError(res, 'File MP3 hoặc Audio URL là bắt buộc.', 400) : null);
+    if (duplicateAction !== 'skip' && requireAudio()) return;
 
     const title = rawTitle || (audioFile ? audioFile.originalname.replace(/\.[^/.]+$/, '') : 'Untitled Song');
     const artistName = rawArtistName || 'Unknown Artist';
@@ -1052,7 +1087,10 @@ export const importSingleSong = async (req: AuthenticatedRequest, res: Response)
       } else if (duplicateAction === 'replace') {
         // Upload new audio file with standard structure
         let newAudioUrl = existingSong.audioUrl;
-        if (audioFile) {
+        if (body.audioUrl) {
+          newAudioUrl = body.audioUrl;
+          await deletePublicMedia(existingSong.audioUrl);
+        } else if (audioFile) {
           const audioStoragePath = buildSafeAudioPath(
             artist.name,
             rawAlbumTitle || existingSong.album?.title,
@@ -1065,7 +1103,9 @@ export const importSingleSong = async (req: AuthenticatedRequest, res: Response)
         }
 
         let newCoverUrl = existingSong.coverUrl;
-        if (coverFile) {
+        if (body.coverUrl) {
+          newCoverUrl = body.coverUrl;
+        } else if (coverFile) {
           const coverStoragePath = `covers/${sanitizeSlug(artist.name)}/${sanitizeSlug(title)}-${Date.now()}.jpg`;
           newCoverUrl = await uploadPublicMedia(coverFile, 'covers', coverStoragePath);
           if (!existingSong.coverUrl.includes('images.unsplash.com')) {
@@ -1110,6 +1150,7 @@ export const importSingleSong = async (req: AuthenticatedRequest, res: Response)
     }
 
     // 5. New Song Upload & Creation
+    if (requireAudio()) return;
     let audioUrl = body.audioUrl;
     if (audioFile) {
       const audioStoragePath = buildSafeAudioPath(
@@ -1179,8 +1220,12 @@ export const replaceSongAudio = async (req: AuthenticatedRequest, res: Response)
     const { id } = req.params;
     const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
     const audioFile = files?.audioFile?.[0];
+    const uploadedUrl = req.body?.audioUrl;
 
-    if (!audioFile) {
+    if (uploadedUrl && !isOwnStorageUrl(uploadedUrl)) {
+      return sendError(res, 'Audio URL không hợp lệ.', 400);
+    }
+    if (!audioFile && !uploadedUrl) {
       return sendError(res, 'Vui lòng chọn file MP3 mới.', 400);
     }
 
@@ -1193,14 +1238,12 @@ export const replaceSongAudio = async (req: AuthenticatedRequest, res: Response)
       return sendError(res, 'Không tìm thấy bài hát.', 404);
     }
 
-    const newPath = buildSafeAudioPath(
+    const newAudioUrl = uploadedUrl || await uploadPublicMedia(audioFile!, 'audio', buildSafeAudioPath(
       song.artist?.name || 'artist',
       song.album?.title,
       song.title,
-      path.extname(audioFile.originalname) || 'mp3'
-    );
-
-    const newAudioUrl = await uploadPublicMedia(audioFile, 'audio', newPath);
+      path.extname(audioFile!.originalname) || 'mp3'
+    ));
 
     // Delete old audio file
     if (song.audioUrl) {

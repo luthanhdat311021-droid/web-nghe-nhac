@@ -10,18 +10,21 @@ const getStorageConfig = () => ({
 
 let isBucketChecked = false;
 
+// New-style keys (sb_secret_...) are not JWTs: Supabase rejects them as a Bearer token and expects only `apikey`.
+const authHeaders = (key: string): Record<string, string> =>
+  key.startsWith('sb_') ? { apikey: key } : { authorization: `Bearer ${key}`, apikey: key };
+
 const ensureBucketExists = async (url: string, key: string, bucket: string) => {
   if (isBucketChecked) return;
   try {
     const checkRes = await fetch(`${url}/storage/v1/bucket/${encodeURIComponent(bucket)}`, {
-      headers: { authorization: `Bearer ${key}`, apikey: key },
+      headers: authHeaders(key),
     });
-    if (!checkRes.ok && checkRes.status === 404) {
+    if (!checkRes.ok && (checkRes.status === 404 || checkRes.status === 400)) {
       await fetch(`${url}/storage/v1/bucket`, {
         method: 'POST',
         headers: {
-          authorization: `Bearer ${key}`,
-          apikey: key,
+          ...authHeaders(key),
           'content-type': 'application/json',
         },
         body: JSON.stringify({ id: bucket, name: bucket, public: true }),
@@ -67,6 +70,35 @@ export const buildSafeAudioPath = (
     .replace(/[\\:*?"<>|]/g, '');
 };
 
+const publicPrefix = (url: string, bucket: string) => `${url}/storage/v1/object/public/${encodeURIComponent(bucket)}/`;
+
+/** True for files that live in this app's own public bucket (what direct browser uploads produce). */
+export const isOwnStorageUrl = (value: unknown): value is string => {
+  const { url, bucket } = getStorageConfig();
+  return typeof value === 'string' && !!url && value.startsWith(publicPrefix(url, bucket)) && !value.includes('..');
+};
+
+/**
+ * Vercel functions accept at most 4.5 MB per request, so large files go from the browser straight to Supabase
+ * Storage with a one-time signed URL. Returns null when storage is not configured or refuses the request.
+ */
+export const createSignedUpload = async (objectPath: string) => {
+  const { url, key, bucket } = getStorageConfig();
+  if (!url || !key) return null;
+  const sanitizedPath = objectPath.replace(/\.\./g, '').replace(/^[/\\]+/, '');
+  await ensureBucketExists(url, key, bucket);
+  const response = await fetch(`${url}/storage/v1/object/upload/sign/${encodeURIComponent(bucket)}/${sanitizedPath}`, {
+    method: 'POST',
+    headers: { ...authHeaders(key), 'x-upsert': 'true' },
+  });
+  if (!response.ok) {
+    console.warn(`[Supabase Storage] createSignedUpload failed (${response.status}): ${(await response.text()).slice(0, 200)}`);
+    return null;
+  }
+  const signed = (await response.json()) as { url: string };
+  return { uploadUrl: `${url}/storage/v1${signed.url}`, publicUrl: `${publicPrefix(url, bucket)}${sanitizedPath}` };
+};
+
 /** Uploads raw in-memory Buffer directly to Supabase Storage */
 export const uploadBuffer = async (
   buffer: Buffer,
@@ -84,8 +116,7 @@ export const uploadBuffer = async (
         {
           method: 'POST',
           headers: {
-            authorization: `Bearer ${key}`,
-            apikey: key,
+            ...authHeaders(key),
             'content-type': contentType || 'application/octet-stream',
             'x-upsert': 'true',
           },
@@ -137,8 +168,7 @@ export const uploadPublicMedia = async (
         {
           method: 'POST',
           headers: {
-            authorization: `Bearer ${key}`,
-            apikey: key,
+            ...authHeaders(key),
             'content-type': file.mimetype || 'application/octet-stream',
             'x-upsert': 'true',
           },
@@ -187,10 +217,7 @@ export const deletePublicMedia = async (urlOrPath?: string | null): Promise<void
         const objectPath = decodeURIComponent(parts[1]);
         await fetch(`${url}/storage/v1/object/${encodeURIComponent(bucket)}/${objectPath}`, {
           method: 'DELETE',
-          headers: {
-            authorization: `Bearer ${key}`,
-            apikey: key,
-          },
+          headers: authHeaders(key),
         }).catch((e) => console.warn('[Supabase Storage] Delete object error:', e));
       }
     } else if (urlOrPath.startsWith('/uploads/')) {
