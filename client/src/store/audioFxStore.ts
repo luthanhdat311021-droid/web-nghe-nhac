@@ -52,9 +52,14 @@ let fadeInSeconds = 0;
 // Hosts known to send CORS headers for audio (Supabase Storage); same-origin media always qualifies.
 const CORS_AUDIO_HOSTS = [/\.supabase\.co$/i];
 
+// iOS Safari plays media routed through Web Audio unreliably (silence, or stopping when the screen locks), so
+// on iPhone/iPad songs always play straight from the <audio> element and the EQ is not offered.
+const IS_IOS = typeof navigator !== 'undefined' &&
+  (/iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+
 /** Whether Web Audio may process this source without being silenced by the browser. */
 export const canProcessSource = (url?: string | null) => {
-  if (!url) return false;
+  if (!url || IS_IOS) return false;
   try {
     const u = new URL(url, window.location.href);
     return u.origin === window.location.origin || CORS_AUDIO_HOSTS.some((re) => re.test(u.hostname));
@@ -102,7 +107,7 @@ export const fxActive = () => useAudioFxStore.getState().enabled && isProUser();
  * must only attach elements whose source is processable and must swap elements before loading one that isn't.
  */
 export const attachAudioElement = (el: HTMLMediaElement | null) => {
-  if (!el || nodes.has(el) || !fxActive() || !ctx || ctx.state !== 'running') return;
+  if (!el || IS_IOS || nodes.has(el) || !fxActive() || !ctx || ctx.state !== 'running') return;
   const src = el.currentSrc || el.src;
   // A cross-origin source loaded without the crossorigin attribute would be silenced, even from a CORS host.
   if (src && (!canProcessSource(src) || (!isSameOrigin(src) && el.crossOrigin !== 'anonymous'))) return;

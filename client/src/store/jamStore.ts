@@ -4,6 +4,7 @@ import api from '../services/api.js';
 import { Song } from '../types/index.js';
 import { useAudioFxStore } from './audioFxStore.js';
 import { usePlayerStore } from './playerStore.js';
+import { useAuthStore } from './authStore.js';
 
 export interface JamMemberInfo {
   id: string;
@@ -190,6 +191,16 @@ export const useJamStore = create<JamState>((set, get) => ({
     useAudioFxStore.getState().setCrossfadeBlocked(false);
   },
 }));
+
+// A room belongs to the account, not the device: when the signed-in user changes (sign-out, expired session,
+// another account), stop following the old room so two accounts never drive this player at once.
+let roomOwnerId = useAuthStore.getState().user?.id ?? null;
+useAuthStore.subscribe((s) => {
+  const userId = s.user?.id ?? null;
+  if (userId === roomOwnerId) return;
+  roomOwnerId = userId;
+  if (useJamStore.getState().code) useJamStore.getState().reset();
+});
 
 export const QUIZ_COVER = '/logo.png';
 

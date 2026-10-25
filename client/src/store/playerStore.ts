@@ -93,6 +93,41 @@ const stopOutgoing = () => {
   outgoingElement = null;
 };
 
+// iOS Safari only lets an <audio> element play from inside a tap. playSong first waits for the server to admit
+// the song (and an ad for Free accounts), and Jam guests start songs from a poll, so both would be refused.
+// An element that has called play() once during a tap stays allowed, so every tap unlocks the current element.
+const unlockedElements = new WeakSet<HTMLAudioElement>();
+const SILENT_WAV = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
+export const unlockAudioElement = () => {
+  const el = getAudioElement();
+  // An element with a song loaded is left alone: the tap may be the play button, which unlocks it anyway.
+  if (!el || unlockedElements.has(el) || !el.paused || el.getAttribute('src')) return;
+  unlockedElements.add(el);
+  const wasMuted = el.muted;
+  // The silent clip must not reach the player state (it would flip isPlaying while a YouTube song plays).
+  const handlerKeys = ['onplay', 'onplaying', 'onpause', 'onwaiting', 'ontimeupdate', 'onloadedmetadata',
+    'ondurationchange', 'onprogress', 'onended', 'onerror'] as const;
+  const handlers = handlerKeys.map((k) => el[k]);
+  handlerKeys.forEach((k) => { el[k] = null; });
+  el.muted = true;
+  el.src = SILENT_WAV;
+  el.play()
+    .catch(() => {}) // interrupted by playSong's own pause in the same tap: the element is unlocked all the same
+    .finally(() => {
+      if (el.getAttribute('src') === SILENT_WAV) {
+        el.pause();
+        el.removeAttribute('src');
+      }
+      el.muted = wasMuted;
+      // pause/emptied/error from dropping the clip arrive as later tasks: restore the handlers after them,
+      // and only where nobody attached fresh ones meanwhile (initAudio).
+      setTimeout(() => handlerKeys.forEach((k, i) => { if (el[k] === null) (el as any)[k] = handlers[i]; }), 100);
+    });
+};
+if (typeof window !== 'undefined') {
+  for (const type of ['touchend', 'click', 'keydown']) window.addEventListener(type, unlockAudioElement, { capture: true });
+}
+
 const getAudioElement = () => {
   if (typeof window === 'undefined' || typeof document === 'undefined') return null;
   if (!audioElement) {
@@ -258,6 +293,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       return;
     }
     const admissionId = ++playbackRequestId;
+    unlockAudioElement(); // still inside the tap that asked for the song
     get().pause();
     set({ isAuthorizing: true, isBuffering: true, playbackError: null, adSeconds: 0 });
     try {
@@ -383,7 +419,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
           })
           .catch((err) => {
             console.warn('[MusicWave Player] Auto-play blocked or audio source error:', err);
-            set({ isPlaying: false, isBuffering: false, playbackError: 'Không thể tải bài hát này.' });
+            set({ isPlaying: false, isBuffering: false,
+              playbackError: err?.name === 'NotAllowedError'
+                ? 'Trình duyệt chặn tự phát: chạm nút phát để nghe.'
+                : 'Không thể tải bài hát này.' });
           });
       }
     }

@@ -2,6 +2,8 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LogOut, AlertCircle } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore.js';
+import { useJamStore } from '../../store/jamStore.js';
+import { usePlayerStore } from '../../store/playerStore.js';
 import { Modal } from './Modal.js';
 import { Button } from './Button.js';
 
@@ -9,7 +11,11 @@ export const LogoutConfirmModal: React.FC = () => {
   const navigate = useNavigate();
   const { isLogoutModalOpen, closeLogoutModal, logout, user } = useAuthStore();
 
-  const handleConfirmLogout = () => {
+  const handleConfirmLogout = async () => {
+    // Leave the listening room while the token still works, so the server drops this member (or closes the
+    // room for a host) instead of leaving the device following a room the next account never joined.
+    await useJamStore.getState().leaveRoom();
+    usePlayerStore.getState().cancelPendingPlayback();
     logout();
     navigate('/login');
   };
