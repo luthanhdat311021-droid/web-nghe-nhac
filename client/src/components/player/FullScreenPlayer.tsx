@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { Suspense, lazy, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ChevronDown,
@@ -21,8 +21,13 @@ import {
   RotateCw,
   Gauge,
   SlidersHorizontal,
+  Sparkles,
 } from 'lucide-react';
 import { useAudioFxStore } from '../../store/audioFxStore.js';
+import { useQuizMask } from '../../store/jamStore.js';
+
+// three.js is large: load the visualizer only when someone turns it on.
+const Visualizer3D = lazy(() => import('./Visualizer3D.js').then((m) => ({ default: m.Visualizer3D })));
 import { Link } from 'react-router-dom';
 import {
   usePlayerStore,
@@ -55,9 +60,20 @@ const FullScreenProgressBar: React.FC = () => {
   );
 };
 
+const VISUALIZER_KEY = 'musicwave_visualizer_v1';
+const readVisualizerPref = () => {
+  try { return localStorage.getItem(VISUALIZER_KEY) === '1'; } catch { return false; }
+};
+
 export const FullScreenPlayer: React.FC = () => {
   const isFullScreenPlayerOpen = usePlayerStore((s) => s.isFullScreenPlayerOpen);
-  const currentSong = useCurrentSong();
+  const currentSong = useQuizMask(useCurrentSong());
+  const [showVisualizer, setShowVisualizer] = useState(readVisualizerPref);
+  const toggleVisualizer = () => {
+    const next = !showVisualizer;
+    setShowVisualizer(next);
+    try { localStorage.setItem(VISUALIZER_KEY, next ? '1' : '0'); } catch {}
+  };
   const isPlaying = useIsPlaying();
   const isBuffering = useIsBuffering();
 
@@ -110,8 +126,14 @@ export const FullScreenPlayer: React.FC = () => {
           transition={{ type: 'spring', damping: 30, stiffness: 300 }}
           className="fixed inset-0 z-50 bg-[#0c0d12] flex flex-col justify-between overflow-y-auto no-scrollbar select-none"
         >
+          {showVisualizer && (
+            <Suspense fallback={null}>
+              <Visualizer3D songId={currentSong.id} coverUrl={currentSong.coverUrl} isPlaying={isPlaying} />
+            </Suspense>
+          )}
+
           {/* Subtle Ambient Background */}
-          <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-25">
+          <div className={`absolute inset-0 overflow-hidden pointer-events-none opacity-25 ${showVisualizer ? 'hidden' : ''}`}>
             <img
               src={currentSong.coverUrl}
               alt=""
@@ -153,7 +175,9 @@ export const FullScreenPlayer: React.FC = () => {
             <motion.div
               animate={{ scale: isPlaying ? 1 : 0.95 }}
               transition={{ duration: 0.35, ease: 'easeOut' }}
-              className="relative w-full max-w-[280px] xs:max-w-[320px] aspect-square rounded-2xl overflow-hidden shadow-2xl shadow-black/80 border border-white/10"
+              className={`relative w-full max-w-[280px] xs:max-w-[320px] aspect-square rounded-2xl overflow-hidden ${
+                showVisualizer ? 'invisible' : 'shadow-2xl shadow-black/80 border border-white/10'
+              }`}
             >
               <img
                 src={currentSong.coverUrl}
@@ -348,6 +372,18 @@ export const FullScreenPlayer: React.FC = () => {
               )}
 
               <div className="flex items-center gap-1.5 ml-auto">
+                <button
+                  onClick={toggleVisualizer}
+                  aria-label={showVisualizer ? 'Tắt hiệu ứng 3D' : 'Bật hiệu ứng 3D'}
+                  aria-pressed={showVisualizer}
+                  title="Hiệu ứng 3D"
+                  className={`p-2 rounded-lg border border-white/[0.08] transition-colors active:scale-95 ${
+                    showVisualizer ? 'text-fuchsia-300 bg-fuchsia-400/15' : 'text-text-secondary bg-white/[0.04] hover:text-white'
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                </button>
+
                 <button
                   onClick={openFx}
                   aria-label="Âm thanh Pro"

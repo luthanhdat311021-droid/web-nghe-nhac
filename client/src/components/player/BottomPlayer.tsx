@@ -15,6 +15,7 @@ import {
   RotateCcw,
   RotateCw,
   SlidersHorizontal,
+  Maximize2,
 } from 'lucide-react';
 import {
   usePlayerStore,
@@ -33,6 +34,7 @@ import { QueueDrawer } from './QueueDrawer.js';
 import { FullScreenPlayer } from './FullScreenPlayer.js';
 import { AudioFxPanel } from './AudioFxPanel.js';
 import { useAudioFxStore } from '../../store/audioFxStore.js';
+import { useQuizMask } from '../../store/jamStore.js';
 import { Link } from 'react-router-dom';
 
 // Mini Progress Line isolated from BottomPlayer container re-renders
@@ -71,7 +73,7 @@ const DesktopProgressScrubber: React.FC = () => {
 };
 
 export const BottomPlayer: React.FC = () => {
-  const currentSong = useCurrentSong();
+  const currentSong = useQuizMask(useCurrentSong());
   const isPlaying = useIsPlaying();
   const isBuffering = useIsBuffering();
   const playbackError = usePlaybackError();
@@ -399,6 +401,15 @@ export const BottomPlayer: React.FC = () => {
               title="Âm thanh Pro (EQ & chuyển bài mượt)"
             >
               <SlidersHorizontal className="w-4 h-4" />
+            </button>
+
+            <button
+              onClick={openFullScreenPlayer}
+              aria-label="Mở màn hình phát toàn màn hình"
+              title="Toàn màn hình & hiệu ứng 3D"
+              className="p-1.5 rounded-lg text-text-muted hover:text-white hover:bg-white/5 transition-colors"
+            >
+              <Maximize2 className="w-4 h-4" />
             </button>
 
             <button

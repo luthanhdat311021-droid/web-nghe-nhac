@@ -44,6 +44,7 @@ export const isProUser = () => {
 // ---------------------------------------------------------------------------
 let ctx: AudioContext | null = null;
 let filters: BiquadFilterNode[] = [];
+let analyser: AnalyserNode | null = null;
 const nodes = new WeakMap<HTMLMediaElement, { source: MediaElementAudioSourceNode; gain: GainNode }>();
 let fadeInArmedUntil = 0;
 let fadeInSeconds = 0;
@@ -83,7 +84,11 @@ export const ensureAudioContext = () => {
       return f;
     });
     filters.reduce((prev, next) => (prev.connect(next), next));
-    filters[filters.length - 1].connect(ctx.destination);
+    // Pass-through tap so the visualizer can read real frequencies for songs routed through the EQ.
+    analyser = ctx.createAnalyser();
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0.8;
+    filters[filters.length - 1].connect(analyser).connect(ctx.destination);
     applyGains(useAudioFxStore.getState().gains);
   }
   if (ctx.state === 'suspended') ctx.resume().catch(() => {});
@@ -112,6 +117,12 @@ export const attachAudioElement = (el: HTMLMediaElement | null) => {
 };
 
 export const isAttached = (el: HTMLMediaElement | null) => !!el && nodes.has(el);
+
+/** The analyser carries real audio only while the playing element is routed through Web Audio. */
+export const getLiveAnalyser = () => {
+  const el = document.getElementById('musicwave-html5-audio') as HTMLMediaElement | null;
+  return analyser && ctx?.state === 'running' && isAttached(el) ? analyser : null;
+};
 
 // Volume ramps work for every source (no CORS needed), unlike Web Audio gain.
 const rampVolume = (el: HTMLMediaElement, from: number, to: number, seconds: number, done?: () => void) => {

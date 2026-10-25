@@ -26,6 +26,49 @@ export const JAM_STICKERS = [
 const userSelect = { select: { id: true, username: true, avatarUrl: true } };
 const songInclude = { artist: { select: { id: true, name: true } }, album: { select: { id: true, title: true } } };
 
+export const QUIZ_ROUND_MS = 30_000;
+export const QUIZ_OPTIONS = 4;
+type Room = NonNullable<Awaited<ReturnType<typeof openRoom>>>;
+
+/** Points for a correct answer: 50 for being right, up to 100 more for answering fast. */
+export const quizPoints = (msLeft: number) => 50 + Math.round(100 * Math.max(0, Math.min(1, msLeft / QUIZ_ROUND_MS)));
+
+const activeSince = () => new Date(Date.now() - MEMBER_TIMEOUT_MS);
+
+/** Close the current round once (concurrent pollers race for it) and post the answer to the chat. */
+const revealQuiz = async (room: Room) => {
+  if (room.quizRevealed || !room.quizSongId) return;
+  const claimed = await prisma.jamRoom.updateMany({
+    where: { id: room.id, quizRound: room.quizRound, quizRevealed: false },
+    data: { quizRevealed: true, quizEndsAt: new Date() },
+  });
+  room.quizRevealed = true;
+  if (!claimed.count) return;
+  const [song, winners] = await Promise.all([
+    prisma.song.findUnique({ where: { id: room.quizSongId }, include: songInclude }),
+    prisma.jamMember.findMany({
+      where: { roomId: room.id, quizAnsweredRound: room.quizRound, quizLastPoints: { gt: 0 } },
+      include: { user: userSelect },
+      orderBy: { quizLastPoints: 'desc' },
+    }),
+  ]);
+  const who = winners.length
+    ? `Đoán đúng: ${winners.map((w) => `${w.user.username} (+${w.quizLastPoints})`).join(', ')}.`
+    : 'Không ai đoán đúng.';
+  await prisma.jamMessage.create({
+    data: { roomId: room.id, userId: room.hostId, kind: 'quiz', text: `Đáp án vòng ${room.quizRound}: ${song?.title ?? '?'} — ${song?.artist?.name ?? ''}. ${who}` },
+  });
+};
+
+const pickRandom = <T,>(items: T[], count: number) => {
+  const pool = [...items];
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = randomInt(i + 1);
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool.slice(0, count);
+};
+
 const newCode = () => Array.from({ length: 6 }, () => CODE_ALPHABET[randomInt(CODE_ALPHABET.length)]).join('');
 const normalizeCode = (code: string) => String(code || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
 
@@ -65,14 +108,15 @@ router.get('/:code', requireAuth, wrap(async (req, res) => {
   const room = await openRoom(req.params.code);
   if (!room) return sendSuccess(res, { ended: true });
   const now = new Date();
-  await prisma.jamMember.upsert({
+  if (!room.quizRevealed && room.quizEndsAt && room.quizEndsAt <= now) await revealQuiz(room);
+  const me = await prisma.jamMember.upsert({
     where: { roomId_userId: { roomId: room.id, userId } },
     create: { roomId: room.id, userId },
     update: { lastSeenAt: now },
   });
   const isHost = room.hostId === userId;
   const since = req.query.since ? new Date(String(req.query.since)) : null;
-  const [song, members, messages] = await Promise.all([
+  const [song, members, messages, quizOptions] = await Promise.all([
     room.songId ? prisma.song.findUnique({ where: { id: room.songId }, include: songInclude }) : null,
     prisma.jamMember.findMany({
       where: { roomId: room.id, lastSeenAt: { gte: new Date(now.getTime() - MEMBER_TIMEOUT_MS) } },
@@ -85,6 +129,9 @@ router.get('/:code', requireAuth, wrap(async (req, res) => {
       orderBy: { createdAt: 'desc' },
       take: 50,
     }),
+    room.quizOptionIds.length
+      ? prisma.song.findMany({ where: { id: { in: room.quizOptionIds } }, select: { id: true, title: true, artist: { select: { name: true } } } })
+      : [],
   ]);
   // Songs suggested by members are handed to the host's player exactly once.
   let pendingSongs: unknown[] = [];
@@ -104,9 +151,22 @@ router.get('/:code', requireAuth, wrap(async (req, res) => {
     isPlaying: room.isPlaying,
     stateAt: room.stateAt,
     serverNow: now,
-    members: members.map((m) => ({ ...m.user, isHost: m.userId === room.hostId })),
+    members: members.map((m) => ({ ...m.user, isHost: m.userId === room.hostId, quizScore: m.quizScore })),
     messages: messages.reverse(),
     pendingSongs,
+    quiz: room.quizRound ? {
+      round: room.quizRound,
+      active: !room.quizRevealed,
+      endsAt: room.quizEndsAt,
+      options: room.quizOptionIds
+        .map((id) => quizOptions.find((s) => s.id === id))
+        .filter(Boolean)
+        .map((s) => ({ id: s!.id, title: s!.title, artistName: s!.artist?.name ?? '' })),
+      // Guests learn the answer only after the round closes; the host runs the game and may see it.
+      correctId: room.quizRevealed || isHost ? room.quizSongId : null,
+      myChoiceId: me.quizAnsweredRound === room.quizRound ? me.quizLastChoice : null,
+      myPoints: me.quizAnsweredRound === room.quizRound ? me.quizLastPoints : null,
+    } : null,
   });
 }));
 
@@ -164,6 +224,83 @@ router.post('/:code/messages', requireAuth, wrap(async (req, res) => {
   if (!await prisma.jamMember.findUnique({ where: { roomId_userId: { roomId: room.id, userId } } })) return sendError(res, 'Bạn chưa vào phòng này.', 403);
   const message = await prisma.jamMessage.create({ data: { roomId: room.id, userId, ...data }, include: { user: userSelect } });
   return sendSuccess(res, message);
+}));
+
+router.post('/:code/quiz/start', requireAuth, wrap(async (req, res) => {
+  const room = await openRoom(req.params.code);
+  if (!room) return sendError(res, 'Phòng nghe chung đã kết thúc.', 404);
+  if (room.hostId !== req.user!.userId) return sendError(res, 'Chỉ chủ phòng mới bắt đầu được trò chơi.', 403);
+  await revealQuiz(room);
+  const catalog = await prisma.song.findMany({ select: { id: true }, take: 1000 });
+  if (catalog.length < QUIZ_OPTIONS) return sendError(res, `Cần ít nhất ${QUIZ_OPTIONS} bài hát để chơi.`, 400);
+  // Avoid asking the same song twice in a row.
+  const [answer] = pickRandom(catalog.filter((s) => s.id !== room.quizSongId), 1);
+  const decoys = pickRandom(catalog.filter((s) => s.id !== answer.id), QUIZ_OPTIONS - 1);
+  const optionIds = pickRandom([answer, ...decoys], QUIZ_OPTIONS).map((s) => s.id);
+  const round = room.quizRound + 1;
+  const [updated, song] = await prisma.$transaction([
+    prisma.jamRoom.update({
+      where: { id: room.id },
+      data: { quizRound: round, quizSongId: answer.id, quizOptionIds: { set: optionIds }, quizRevealed: false,
+        quizEndsAt: new Date(Date.now() + QUIZ_ROUND_MS) },
+    }),
+    prisma.song.findUnique({ where: { id: answer.id }, include: songInclude }),
+    prisma.jamMessage.create({ data: { roomId: room.id, userId: room.hostId, kind: 'quiz', text: `Vòng ${round} bắt đầu! Nghe nhạc và chọn đúng tên bài hát.` } }),
+  ]);
+  return sendSuccess(res, { round: updated.quizRound, song });
+}));
+
+router.post('/:code/quiz/answer', requireAuth, wrap(async (req, res) => {
+  const songId = z.string().min(1).max(64).safeParse(req.body?.songId);
+  if (!songId.success) return sendError(res, 'Đáp án không hợp lệ.', 400);
+  const room = await openRoom(req.params.code);
+  if (!room) return sendError(res, 'Phòng nghe chung đã kết thúc.', 404);
+  const userId = req.user!.userId;
+  if (room.hostId === userId) return sendError(res, 'Chủ phòng là người dẫn trò chơi, không trả lời.', 403);
+  if (!await prisma.jamMember.findUnique({ where: { roomId_userId: { roomId: room.id, userId } } })) return sendError(res, 'Bạn chưa vào phòng này.', 403);
+  if (room.quizRevealed || !room.quizSongId) return sendError(res, 'Chưa có vòng đoán nào đang diễn ra.', 409);
+  const msLeft = (room.quizEndsAt?.getTime() ?? 0) - Date.now();
+  if (msLeft <= 0) {
+    await revealQuiz(room);
+    return sendError(res, 'Hết giờ rồi!', 409);
+  }
+  if (!room.quizOptionIds.includes(songId.data)) return sendError(res, 'Đáp án không hợp lệ.', 400);
+  const points = songId.data === room.quizSongId ? quizPoints(msLeft) : 0;
+  // The round check in the filter makes a second answer (double click, two tabs) a no-op.
+  const saved = await prisma.jamMember.updateMany({
+    where: { roomId: room.id, userId, quizAnsweredRound: { lt: room.quizRound } },
+    data: { quizAnsweredRound: room.quizRound, quizLastChoice: songId.data, quizLastPoints: points, quizScore: { increment: points } },
+  });
+  if (!saved.count) return sendError(res, 'Bạn đã trả lời vòng này rồi.', 409);
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { username: true } });
+  await prisma.jamMessage.create({ data: { roomId: room.id, userId, kind: 'quiz', text: `${user?.username ?? 'Một người'} đã chốt đáp án.` } });
+  // Everyone still in the room has answered: no need to wait for the timer.
+  const [guests, answered] = await Promise.all([
+    prisma.jamMember.count({ where: { roomId: room.id, userId: { not: room.hostId }, lastSeenAt: { gte: activeSince() } } }),
+    prisma.jamMember.count({ where: { roomId: room.id, userId: { not: room.hostId }, quizAnsweredRound: room.quizRound } }),
+  ]);
+  if (answered >= guests) await revealQuiz(room);
+  return sendSuccess(res, { correct: points > 0, points });
+}));
+
+router.post('/:code/quiz/reveal', requireAuth, wrap(async (req, res) => {
+  const room = await openRoom(req.params.code);
+  if (!room) return sendError(res, 'Phòng nghe chung đã kết thúc.', 404);
+  if (room.hostId !== req.user!.userId) return sendError(res, 'Chỉ chủ phòng mới công bố được đáp án.', 403);
+  await revealQuiz(room);
+  return sendSuccess(res, null);
+}));
+
+router.post('/:code/quiz/reset', requireAuth, wrap(async (req, res) => {
+  const room = await openRoom(req.params.code);
+  if (!room) return sendError(res, 'Phòng nghe chung đã kết thúc.', 404);
+  if (room.hostId !== req.user!.userId) return sendError(res, 'Chỉ chủ phòng mới làm mới được bảng điểm.', 403);
+  await prisma.$transaction([
+    prisma.jamRoom.update({ where: { id: room.id }, data: { quizRound: 0, quizSongId: null, quizOptionIds: { set: [] }, quizRevealed: true, quizEndsAt: null } }),
+    prisma.jamMember.updateMany({ where: { roomId: room.id }, data: { quizScore: 0, quizAnsweredRound: 0, quizLastChoice: null, quizLastPoints: 0 } }),
+    prisma.jamMessage.create({ data: { roomId: room.id, userId: room.hostId, kind: 'quiz', text: 'Chủ phòng đã kết thúc trò chơi và làm mới bảng điểm.' } }),
+  ]);
+  return sendSuccess(res, null);
 }));
 
 router.post('/:code/leave', requireAuth, wrap(async (req, res) => {

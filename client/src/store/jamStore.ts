@@ -1,19 +1,32 @@
+import { useMemo } from 'react';
 import { create } from 'zustand';
 import api from '../services/api.js';
 import { Song } from '../types/index.js';
 import { useAudioFxStore } from './audioFxStore.js';
+import { usePlayerStore } from './playerStore.js';
 
 export interface JamMemberInfo {
   id: string;
   username: string;
   avatarUrl: string | null;
   isHost: boolean;
+  quizScore: number;
+}
+
+export interface JamQuizState {
+  round: number;
+  active: boolean;
+  endsAt: string | null;
+  options: { id: string; title: string; artistName: string }[];
+  correctId: string | null; // guests receive it only after the round closes
+  myChoiceId: string | null;
+  myPoints: number | null;
 }
 
 export interface JamMessageInfo {
   id: string;
   userId: string;
-  kind: 'chat' | 'queue' | 'sticker';
+  kind: 'chat' | 'queue' | 'sticker' | 'quiz';
   text: string;
   createdAt: string;
   user?: { id: string; username: string; avatarUrl: string | null };
@@ -32,6 +45,7 @@ export interface JamSnapshot {
   members: JamMemberInfo[];
   messages: JamMessageInfo[];
   pendingSongs: Song[];
+  quiz: JamQuizState | null;
 }
 
 const SESSION_KEY = 'musicwave_jam_code';
@@ -52,6 +66,12 @@ interface JamState {
   messages: JamMessageInfo[];
   ended: boolean;
   error: string | null;
+  quiz: JamQuizState | null;
+  serverOffsetMs: number; // server clock minus local clock, for the quiz countdown
+  startQuiz: () => Promise<void>;
+  answerQuiz: (songId: string) => Promise<{ correct: boolean; points: number }>;
+  revealQuiz: () => Promise<void>;
+  resetQuiz: () => Promise<void>;
   createRoom: () => Promise<string>;
   joinRoom: (code: string) => void;
   leaveRoom: () => Promise<void>;
@@ -64,11 +84,40 @@ interface JamState {
   reset: () => void;
 }
 
-const empty = { isHost: false, hostId: null, roomSong: null, roomPlaying: false, members: [], messages: [], ended: false, error: null };
+const empty = { isHost: false, hostId: null, roomSong: null, roomPlaying: false, members: [], messages: [], ended: false, error: null,
+  quiz: null, serverOffsetMs: 0 };
 
 export const useJamStore = create<JamState>((set, get) => ({
   code: readSavedCode(),
   ...empty,
+
+  startQuiz: async () => {
+    const code = get().code;
+    if (!code) return;
+    const res = await api.post(`/jam/${code}/quiz/start`);
+    const song = res.data.data.song as Song;
+    // The host's player is what the room hears; JamSync publishes it to every guest.
+    usePlayerStore.getState().playSong(song, [song]);
+  },
+
+  answerQuiz: async (songId) => {
+    const code = get().code;
+    if (!code) throw new Error('Not in a room');
+    const res = await api.post(`/jam/${code}/quiz/answer`, { songId });
+    const result = res.data.data as { correct: boolean; points: number };
+    set((s) => ({ quiz: s.quiz && { ...s.quiz, myChoiceId: songId, myPoints: result.points } }));
+    return result;
+  },
+
+  revealQuiz: async () => {
+    const code = get().code;
+    if (code) await api.post(`/jam/${code}/quiz/reveal`);
+  },
+
+  resetQuiz: async () => {
+    const code = get().code;
+    if (code) await api.post(`/jam/${code}/quiz/reset`);
+  },
 
   createRoom: async () => {
     const res = await api.post('/jam');
@@ -122,6 +171,8 @@ export const useJamStore = create<JamState>((set, get) => ({
         messages: fresh.length ? [...s.messages, ...fresh].slice(-200) : s.messages,
         ended: false,
         error: null,
+        quiz: snap.quiz,
+        serverOffsetMs: Date.parse(snap.serverNow) - Date.now(),
       };
     });
     useAudioFxStore.getState().setCrossfadeBlocked(!snap.isHost);
@@ -139,3 +190,17 @@ export const useJamStore = create<JamState>((set, get) => ({
     useAudioFxStore.getState().setCrossfadeBlocked(false);
   },
 }));
+
+export const QUIZ_COVER = '/logo.png';
+
+/** While a quiz round runs, guests must not see what the room is playing: swap in a mystery title and cover. */
+export const useQuizMask = <T extends Song | null>(song: T): T => {
+  const hide = useJamStore((s) => !!s.quiz?.active && !s.isHost && !!song && s.roomSong?.id === song.id);
+  return useMemo(
+    () => (hide && song
+      ? { ...song, title: 'Bài hát bí ẩn', coverUrl: QUIZ_COVER, album: undefined,
+          artist: song.artist && { ...song.artist, name: 'Đang đoán bài…' } }
+      : song),
+    [hide, song],
+  );
+};

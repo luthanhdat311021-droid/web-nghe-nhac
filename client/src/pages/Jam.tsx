@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Users, Copy, Check, LogOut, Crown, Music2, Plus, Search, Loader2, Radio } from 'lucide-react';
-import { useJamStore } from '../store/jamStore.js';
+import { useJamStore, useQuizMask } from '../store/jamStore.js';
+import { QuizPanel } from '../components/jam/QuizPanel.js';
 import { useAuthStore } from '../store/authStore.js';
 import { usePlayerStore, useCurrentSong, useIsPlaying } from '../store/playerStore.js';
 import { searchService } from '../services/search.service.js';
@@ -152,6 +153,7 @@ const Room: React.FC<{ code: string }> = ({ code }) => {
   const playbackError = usePlayerStore((s) => s.playbackError);
   const [copied, setCopied] = useState(false);
   const chatRef = useRef<HTMLDivElement>(null);
+  const maskedRoomSong = useQuizMask(roomSong);
 
   useEffect(() => {
     chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight, behavior: 'smooth' });
@@ -183,7 +185,7 @@ const Room: React.FC<{ code: string }> = ({ code }) => {
     );
   }
 
-  const shownSong = isHost ? currentSong : roomSong;
+  const shownSong = isHost ? currentSong : maskedRoomSong;
   const shownPlaying = isHost ? isPlaying : roomPlaying;
 
   return (
@@ -224,6 +226,8 @@ const Room: React.FC<{ code: string }> = ({ code }) => {
           </div>
         </div>
 
+        <QuizPanel />
+
         <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5 space-y-3">
           <h3 className="text-sm font-bold text-white uppercase tracking-wider">Thêm bài vào phòng</h3>
           <AddSongBox />
@@ -254,6 +258,10 @@ const Room: React.FC<{ code: string }> = ({ code }) => {
             m.kind === 'queue' ? (
               <p key={m.id} className="text-xs text-emerald-300/90 text-center">
                 🎵 {m.user?.username} đã thêm "{m.text}"
+              </p>
+            ) : m.kind === 'quiz' ? (
+              <p key={m.id} className="text-xs text-amber-200 text-center rounded-lg bg-amber-300/10 border border-amber-300/20 px-3 py-1.5">
+                🎮 {m.text}
               </p>
             ) : m.kind === 'sticker' ? (
               <div key={m.id} className={`flex gap-2 items-end ${m.userId === me?.id ? 'flex-row-reverse' : ''}`}>

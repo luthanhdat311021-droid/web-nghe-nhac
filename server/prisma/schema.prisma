@@ -361,6 +361,12 @@ model JamRoom {
   isPlaying Boolean @default(false)
   stateAt DateTime @default(now())
   pendingSongIds String[] @default([])
+  // Song quiz: the host plays quizSongId to everyone and guests pick its title from quizOptionIds.
+  quizRound Int @default(0)
+  quizSongId String?
+  quizOptionIds String[] @default([])
+  quizEndsAt DateTime?
+  quizRevealed Boolean @default(true)
   createdAt DateTime @default(now())
   endedAt DateTime?
   host User @relation(fields: [hostId], references: [id], onDelete: Cascade)
@@ -374,6 +380,10 @@ model JamMember {
   userId String
   joinedAt DateTime @default(now())
   lastSeenAt DateTime @default(now())
+  quizScore Int @default(0)
+  quizAnsweredRound Int @default(0)
+  quizLastChoice String?
+  quizLastPoints Int @default(0)
   room JamRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   @@id([roomId, userId])
@@ -383,7 +393,7 @@ model JamMessage {
   id String @id @default(uuid())
   roomId String
   userId String
-  kind String @default("chat") // chat | queue | sticker
+  kind String @default("chat") // chat | queue | sticker | quiz
   text String
   createdAt DateTime @default(now())
   room JamRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)

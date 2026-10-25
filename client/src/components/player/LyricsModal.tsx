@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { X, Music2, Play, Pause, Minus, Plus, Loader2 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { usePlayerStore, useCurrentSong, useIsPlaying } from '../../store/playerStore.js';
+import { useQuizMask } from '../../store/jamStore.js';
 import { parseSyncedLyrics } from '../../utils/lyrics.js';
 import { songService } from '../../services/song.service.js';
 import { QUERY_KEYS } from '../../services/queryClient.js';
@@ -212,7 +213,8 @@ const KaraokeBody: React.FC = () => {
 
 export const LyricsModal: React.FC = () => {
   const isLyricsOpen = usePlayerStore((s) => s.isLyricsOpen);
-  const currentSong = useCurrentSong();
+  const playing = useCurrentSong();
+  const currentSong = useQuizMask(playing);
   const toggleLyrics = usePlayerStore((s) => s.toggleLyrics);
 
   useEffect(() => {
@@ -261,7 +263,11 @@ export const LyricsModal: React.FC = () => {
       </div>
 
       <div className="relative z-10 flex-1 flex flex-col min-h-0">
-        <KaraokeBody key={currentSong.id} />
+        {currentSong === playing ? (
+          <KaraokeBody key={currentSong.id} />
+        ) : (
+          <p className="m-auto px-6 text-center text-white/70">Đang chơi đoán bài: lời bài hát tạm ẩn đến khi công bố đáp án.</p>
+        )}
       </div>
     </motion.div>
   );
