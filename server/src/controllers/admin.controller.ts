@@ -249,6 +249,8 @@ export const getYoutubeInfo = async (req: AuthenticatedRequest, res: Response) =
 
 // ==================== SONG CRUD ====================
 
+const formBoolean = z.preprocess((v) => (v === undefined ? undefined : v === true || v === 'true' || v === '1'), z.boolean().optional().default(false));
+
 const songSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   artistId: z.string().min(1, 'Artist is required'),
@@ -260,8 +262,9 @@ const songSchema = z.object({
   youtubeId: z.string().optional().nullable(),
   audioUrl: z.string().optional(),
   coverUrl: z.string().optional(),
-  isTrending: z.coerce.boolean().optional().default(false),
-  isFeatured: z.coerce.boolean().optional().default(false),
+  // Multipart forms send "false" as a string, which z.coerce.boolean() would read as true.
+  isTrending: formBoolean,
+  isFeatured: formBoolean,
   lyrics: z.string().optional(),
   syncedLyrics: z.string().optional(),
 });

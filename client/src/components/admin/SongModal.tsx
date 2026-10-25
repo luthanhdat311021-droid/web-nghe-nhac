@@ -12,7 +12,7 @@ import {
   UserPlus,
 } from 'lucide-react';
 import { Song, Artist, Album, Genre } from '../../types/index.js';
-import { adminService } from '../../services/admin.service.js';
+import { adminService, uploadToStorage } from '../../services/admin.service.js';
 import { artistService } from '../../services/artist.service.js';
 import { albumService } from '../../services/album.service.js';
 import { Modal } from '../common/Modal.js';
@@ -168,6 +168,7 @@ export const SongModal: React.FC<SongModalProps> = ({
   const [albums, setAlbums] = useState<Album[]>([]);
   const [genres, setGenres] = useState<Genre[]>([]);
   const [loading, setLoading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState('');
   const [isFetchingMeta, setIsFetchingMeta] = useState(false);
   const [metaFeedback, setMetaFeedback] = useState<string>('');
 
@@ -404,6 +405,11 @@ export const SongModal: React.FC<SongModalProps> = ({
 
     try {
       setLoading(true);
+      const storageMeta = {
+        title: title.trim(),
+        artistName: artists.find((a) => a.id === artistId)?.name,
+        albumTitle: albums.find((a) => a.id === albumId)?.title,
+      };
       const finalDuration = parseDurationToSeconds(duration);
       const formData = new FormData();
       formData.append('title', title.trim());
@@ -419,13 +425,12 @@ export const SongModal: React.FC<SongModalProps> = ({
         if (ytId) formData.append('youtubeId', ytId);
         formData.append('audioUrl', youtubeUrl.trim());
       } else if (sourceType === 'upload') {
-        if (audioFile && audioFile.size > 4.5 * 1024 * 1024) {
-          alert(`Tệp âm thanh "${audioFile.name}" (${(audioFile.size / 1024 / 1024).toFixed(1)} MB) vượt quá giới hạn 4,5 MB. Vui lòng nén tệp hoặc chọn nguồn URL YouTube.`);
-          setLoading(false);
-          return;
-        }
         if (audioFile) {
-          formData.append('audioFile', audioFile);
+          // Straight to Supabase Storage, so files over Vercel's 4.5 MB request limit still work.
+          const uploaded = await uploadToStorage(audioFile, 'audio', storageMeta, (loaded, total) =>
+            setUploadStatus(`Đang tải nhạc lên… ${Math.round((loaded / total) * 100)}%`));
+          if (uploaded) formData.append('audioUrl', uploaded);
+          else formData.append('audioFile', audioFile);
         } else if (audioUrl) {
           formData.append('audioUrl', audioUrl);
         }
@@ -434,16 +439,15 @@ export const SongModal: React.FC<SongModalProps> = ({
       }
 
       if (coverType === 'upload' && coverFile) {
-        if (coverFile.size > 3 * 1024 * 1024) {
-          alert('File ảnh bìa không được vượt quá 3MB.');
-          setLoading(false);
-          return;
-        }
-        formData.append('coverFile', coverFile);
+        setUploadStatus('Đang tải ảnh bìa lên…');
+        const uploaded = await uploadToStorage(coverFile, 'cover', storageMeta);
+        if (uploaded) formData.append('coverUrl', uploaded);
+        else formData.append('coverFile', coverFile);
       } else if (coverUrl.trim()) {
         formData.append('coverUrl', coverUrl.trim());
       }
 
+      setUploadStatus('Đang lưu bài hát…');
       formData.append('isTrending', String(isTrending));
       formData.append('isFeatured', String(isFeatured));
       if (lyrics) formData.append('lyrics', lyrics);
@@ -475,8 +479,12 @@ export const SongModal: React.FC<SongModalProps> = ({
       alert(msg);
     } finally {
       setLoading(false);
+      setUploadStatus('');
     }
   };
+
+  // Albums belong to one artist: once an artist is picked, offer only theirs.
+  const artistAlbums = artistId ? albums.filter((al) => al.artistId === artistId) : albums;
 
   return (
     <Modal
@@ -571,6 +579,8 @@ export const SongModal: React.FC<SongModalProps> = ({
               onChange={(e) => {
                 setArtistId(e.target.value);
                 if (e.target.value) setSuggestedArtistName('');
+                // An album of the previous artist no longer fits.
+                if (albumId && !albums.some((al) => al.id === albumId && al.artistId === e.target.value)) setAlbumId('');
               }}
               required
               className="w-full rounded-xl bg-background-surface border border-white/10 px-3 py-2 text-xs sm:text-sm text-text-primary outline-none focus:border-white/20 transition-colors"
@@ -612,7 +622,7 @@ export const SongModal: React.FC<SongModalProps> = ({
               className="w-full rounded-xl bg-background-surface border border-white/10 px-3 py-2 text-xs sm:text-sm text-text-primary outline-none focus:border-white/20 transition-colors"
             >
               <option value="">Không thuộc album (Single)</option>
-              {albums.map((al) => (
+              {artistAlbums.map((al) => (
                 <option key={al.id} value={al.id}>
                   {al.title}
                 </option>
@@ -898,7 +908,8 @@ export const SongModal: React.FC<SongModalProps> = ({
         </div>
 
         {/* Action Buttons */}
-        <div className="flex justify-end gap-2 pt-3 border-t border-white/10">
+        <div className="flex items-center justify-end gap-2 pt-3 border-t border-white/10">
+          {uploadStatus && <span className="mr-auto text-[11px] text-amber-200 font-mono">{uploadStatus}</span>}
           <Button type="button" variant="ghost" size="sm" onClick={onClose}>
             Hủy
           </Button>

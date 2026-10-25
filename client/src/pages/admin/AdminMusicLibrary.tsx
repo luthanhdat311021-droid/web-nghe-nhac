@@ -28,6 +28,7 @@ import {
   Disc3,
   User,
   SlidersHorizontal,
+  Plus,
 } from 'lucide-react';
 import { Song, Genre, Artist, ImportBatch, DuplicateCheckResult } from '../../types/index.js';
 import { songService } from '../../services/song.service.js';
@@ -571,8 +572,22 @@ export const AdminMusicLibrary: React.FC = () => {
           </div>
         </div>
 
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+        {/* Add a single song by hand: pick artist/album, upload audio and cover */}
+        <Button
+          variant="primary"
+          size="sm"
+          onClick={() => {
+            setEditingSong(null);
+            setIsSongModalOpen(true);
+          }}
+          leftIcon={<Plus className="w-3.5 h-3.5" />}
+        >
+          Thêm bài hát
+        </Button>
+
         {/* Tab Switcher */}
-        <div className="flex items-center gap-1 p-1 rounded-xl bg-white/[0.04] border border-white/[0.08] self-start sm:self-auto">
+        <div className="flex items-center gap-1 p-1 rounded-xl bg-white/[0.04] border border-white/[0.08]">
           <button
             onClick={() => setActiveTab('library')}
             className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
@@ -611,6 +626,7 @@ export const AdminMusicLibrary: React.FC = () => {
             <History className="w-3.5 h-3.5" />
             Lịch sử nhập nhạc
           </button>
+        </div>
         </div>
       </div>
 
@@ -706,12 +722,12 @@ export const AdminMusicLibrary: React.FC = () => {
                 Làm mới
               </Button>
               <Button
-                variant="primary"
+                variant="secondary"
                 size="sm"
                 onClick={() => setActiveTab('upload')}
                 leftIcon={<Upload className="w-3.5 h-3.5" />}
               >
-                Tải nhạc MP3
+                Tải nhạc MP3 hàng loạt
               </Button>
             </div>
           </div>
