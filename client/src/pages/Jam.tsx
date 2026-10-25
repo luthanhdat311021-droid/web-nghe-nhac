@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { Users, Copy, Check, LogOut, Crown, Music2, Plus, Search, Loader2, Radio } from 'lucide-react';
+import { Users, Copy, Check, LogOut, Crown, Music2, Plus, Radio, Play, ListPlus } from 'lucide-react';
 import { useJamStore, useQuizMask } from '../store/jamStore.js';
 import { QuizPanel } from '../components/jam/QuizPanel.js';
+import { SongPicker } from '../components/jam/SongPicker.js';
 import { useAuthStore } from '../store/authStore.js';
 import { usePlayerStore, useCurrentSong, useIsPlaying } from '../store/playerStore.js';
-import { searchService } from '../services/search.service.js';
 import { Song } from '../types/index.js';
 import { Button } from '../components/common/Button.js';
 import { ChatComposer, stickerAnimated, stickerStill } from '../components/jam/ChatComposer.js';
@@ -82,64 +82,77 @@ const Landing: React.FC = () => {
   );
 };
 
-const AddSongBox: React.FC = () => {
+const actionClass = 'flex-shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-bold transition-colors active:scale-95 flex items-center gap-1';
+
+/** Host picks what the room hears (play now or queue); guests suggest songs to the host's queue. */
+const RoomMusicBox: React.FC<{ isHost: boolean }> = ({ isHost }) => {
   const addSong = useJamStore((s) => s.addSong);
-  const [query, setQuery] = useState('');
-  const [results, setResults] = useState<Song[]>([]);
-  const [loading, setLoading] = useState(false);
+  const queue = usePlayerStore((s) => s.queue);
+  const queueIndex = usePlayerStore((s) => s.queueIndex);
   const [notice, setNotice] = useState('');
+  const upNext = queue.slice(queueIndex + 1, queueIndex + 6);
 
-  useEffect(() => {
-    const q = query.trim();
-    if (q.length < 2) return setResults([]);
-    const controller = new AbortController();
-    const timer = setTimeout(async () => {
-      setLoading(true);
-      try {
-        const data = await searchService.getSuggestions(q, 6, controller.signal);
-        setResults(data.songs || []);
-      } catch {}
-      setLoading(false);
-    }, 300);
-    return () => { clearTimeout(timer); controller.abort(); };
-  }, [query]);
-
-  const handleAdd = async (song: Song) => {
+  const suggest = async (song: Song) => {
     try {
       setNotice(await addSong(song.id));
-      setQuery('');
     } catch (err: any) {
       setNotice(err.response?.data?.message || 'Không thêm được bài hát.');
     }
   };
 
   return (
-    <div className="space-y-2">
-      <div className="relative">
-        <Search className="w-4 h-4 text-text-muted absolute left-3 top-1/2 -translate-y-1/2" />
-        <input
-          value={query}
-          onChange={(e) => { setQuery(e.target.value); setNotice(''); }}
-          placeholder="Tìm bài để thêm vào phòng…"
-          className="w-full rounded-xl bg-black/20 border border-white/10 py-2.5 pl-9 pr-9 text-sm text-white placeholder:text-text-muted focus:outline-none focus:border-emerald-300/60"
-        />
-        {loading && <Loader2 className="w-4 h-4 text-text-muted absolute right-3 top-1/2 -translate-y-1/2 animate-spin" />}
-      </div>
-      {results.length > 0 && (
-        <div className="rounded-xl border border-white/10 bg-background-elevated divide-y divide-white/5 overflow-hidden">
-          {results.map((song) => (
-            <button key={song.id} onClick={() => handleAdd(song)} className="w-full flex items-center gap-3 p-2.5 hover:bg-white/5 text-left">
-              <img src={song.coverUrl} alt="" className="w-9 h-9 rounded-md object-cover" />
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm font-semibold text-white truncate">{song.title}</span>
-                <span className="block text-xs text-text-muted truncate">{song.artist?.name}</span>
-              </span>
-              <Plus className="w-4 h-4 text-emerald-300" />
+    <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5 space-y-3">
+      <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+        {isHost ? 'Chọn nhạc cho phòng' : 'Đề xuất bài cho phòng'}
+      </h3>
+      <SongPicker
+        renderActions={(song) =>
+          isHost ? (
+            <>
+              <button
+                onClick={() => { usePlayerStore.getState().playSong(song); setNotice(`Đang phát "${song.title}" cho cả phòng.`); }}
+                aria-label={`Phát ngay ${song.title}`}
+                className={`${actionClass} bg-emerald-400 text-black hover:bg-emerald-300`}
+              >
+                <Play className="w-3.5 h-3.5 fill-current" /> Phát
+              </button>
+              <button
+                onClick={() => { usePlayerStore.getState().addToQueue(song); setNotice(`Đã thêm "${song.title}" vào hàng chờ.`); }}
+                aria-label={`Thêm ${song.title} vào hàng chờ`}
+                className={`${actionClass} border border-white/15 text-white hover:bg-white/10`}
+              >
+                <ListPlus className="w-3.5 h-3.5" />
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => suggest(song)}
+              aria-label={`Đề xuất ${song.title}`}
+              className={`${actionClass} border border-emerald-300/40 text-emerald-300 hover:bg-emerald-400/10`}
+            >
+              <Plus className="w-3.5 h-3.5" /> Đề xuất
             </button>
+          )
+        }
+      />
+      {notice && <p className="text-xs text-emerald-300" role="status">{notice}</p>}
+      {isHost && upNext.length > 0 && (
+        <div className="space-y-1.5 pt-1">
+          <p className="text-[11px] uppercase tracking-wider font-bold text-text-muted">Tiếp theo</p>
+          {upNext.map((song, i) => (
+            <div key={`${song.id}-${i}`} className="flex min-w-0 items-center gap-2 text-xs">
+              <span className="w-4 text-text-muted">{i + 1}</span>
+              <span className="truncate text-white">{song.title}</span>
+              <span className="truncate text-text-muted">· {song.artist?.name}</span>
+            </div>
           ))}
         </div>
       )}
-      {notice && <p className="text-xs text-emerald-300">{notice}</p>}
+      <p className="text-xs text-text-muted">
+        {isHost
+          ? 'Bấm "Phát" để cả phòng nghe ngay, hoặc thêm vào hàng chờ. Bài khách đề xuất cũng tự vào hàng chờ của bạn.'
+          : 'Bài bạn đề xuất sẽ vào hàng chờ của chủ phòng. Bạn cũng có thể dùng menu ⋮ của bất kỳ bài nào → "Thêm vào phòng nghe chung".'}
+      </p>
     </div>
   );
 };
@@ -229,13 +242,7 @@ const Room: React.FC<{ code: string }> = ({ code }) => {
 
         <QuizPanel />
 
-        <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5 space-y-3">
-          <h3 className="text-sm font-bold text-white uppercase tracking-wider">Thêm bài vào phòng</h3>
-          <AddSongBox />
-          <p className="text-xs text-text-muted">
-            Bài được thêm sẽ vào hàng chờ của chủ phòng. Bạn cũng có thể dùng menu ⋮ của bất kỳ bài nào → "Thêm vào phòng nghe chung".
-          </p>
-        </div>
+        <RoomMusicBox isHost={isHost} />
 
         <div className="space-y-2">
           <h3 className="text-sm font-bold text-white uppercase tracking-wider px-1">Đang nghe ({members.length})</h3>

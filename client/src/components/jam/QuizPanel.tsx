@@ -24,6 +24,7 @@ export const QuizPanel: React.FC = () => {
   const { isHost, quiz, members, serverOffsetMs, startQuiz, answerQuiz, revealQuiz, resetQuiz } = useJamStore();
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
+  const [picking, setPicking] = useState(false); // host's song list stays folded until they start a round
   const secondsLeft = useSecondsLeft(quiz?.endsAt ?? null, !!quiz?.active, serverOffsetMs);
   useEffect(() => setNotice(''), [quiz?.round]);
 
@@ -124,15 +125,28 @@ export const QuizPanel: React.FC = () => {
       )}
       {notice && <p className="text-xs text-amber-200" role="status">{notice}</p>}
 
-      {isHost && !quiz?.active && (
-        <QuizSongPicker round={(quiz?.round ?? 0) + 1} busy={busy} onStart={(songId) => run(() => startQuiz(songId))} />
+      {isHost && !quiz?.active && picking && (
+        <QuizSongPicker
+          round={(quiz?.round ?? 0) + 1}
+          busy={busy}
+          onStart={(songId) => run(async () => { await startQuiz(songId); setPicking(false); })}
+        />
       )}
 
       {isHost && (
         <div className="flex flex-wrap gap-2">
-          {quiz?.active && (
+          {quiz?.active ? (
             <Button variant="secondary" size="sm" disabled={busy} onClick={() => run(revealQuiz)} leftIcon={<Eye className="w-4 h-4" />}>
               Công bố đáp án
+            </Button>
+          ) : !picking && (
+            <Button variant="primary" size="sm" onClick={() => setPicking(true)} leftIcon={<Gamepad2 className="w-4 h-4" />}>
+              {quiz ? `Chọn bài vòng ${quiz.round + 1}` : 'Bắt đầu đoán bài'}
+            </Button>
+          )}
+          {picking && !quiz?.active && (
+            <Button variant="ghost" size="sm" onClick={() => setPicking(false)}>
+              Đóng
             </Button>
           )}
           {quiz && (
