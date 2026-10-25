@@ -33,3 +33,14 @@ export const parseSyncedLyrics = (lyricsRaw?: string | null): SyncedLyricLine[] 
 
   return result.sort((a, b) => a.time - b.time);
 };
+
+/** Back to LRC text with every line moved by `shiftSec` (negative = earlier), clamped at 0. */
+export const toShiftedLrc = (lines: SyncedLyricLine[], shiftSec: number) =>
+  lines
+    .map(({ time, text }) => {
+      const t = Math.max(0, time + shiftSec);
+      const m = Math.floor(t / 60);
+      const s = t - m * 60;
+      return `[${String(m).padStart(2, '0')}:${s.toFixed(2).padStart(5, '0')}] ${text}`;
+    })
+    .join('\n');

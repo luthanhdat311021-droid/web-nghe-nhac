@@ -4,7 +4,7 @@ import { X, Music2, Play, Pause, Minus, Plus, Loader2, Search } from 'lucide-rea
 import { useQuery } from '@tanstack/react-query';
 import { usePlayerStore, useCurrentSong, useIsPlaying } from '../../store/playerStore.js';
 import { useQuizMask } from '../../store/jamStore.js';
-import { parseSyncedLyrics } from '../../utils/lyrics.js';
+import { parseSyncedLyrics, toShiftedLrc } from '../../utils/lyrics.js';
 import { songService } from '../../services/song.service.js';
 import { QUERY_KEYS, queryClient } from '../../services/queryClient.js';
 import { adminService } from '../../services/admin.service.js';
@@ -81,7 +81,15 @@ const KaraokeBody: React.FC = () => {
   };
 
   const [offset, setOffset] = useState(0);
-  useEffect(() => setOffset(0), [currentSong.id]);
+  // Tap-to-sync: the next tapped line is taken as "being sung right now" and the offset is set from it.
+  const [syncMode, setSyncMode] = useState(false);
+  const [savingOffset, setSavingOffset] = useState(false);
+  const [offsetNote, setOffsetNote] = useState('');
+  useEffect(() => {
+    setOffset(0);
+    setSyncMode(false);
+    setOffsetNote('');
+  }, [currentSong.id]);
   const time = smoothTime + offset;
 
   const lines = useMemo(() => parseSyncedLyrics(lyrics?.syncedLyrics), [lyrics?.syncedLyrics]);
@@ -113,6 +121,35 @@ const KaraokeBody: React.FC = () => {
   }, [activeIndex]);
   const onUserScroll = () => {
     userScrollUntil.current = Date.now() + 4000;
+  };
+
+  const onLineClick = (lineTime: number) => {
+    if (syncMode) {
+      setOffset(Math.round((lineTime - smoothTime) * 4) / 4);
+      setSyncMode(false);
+      setOffsetNote('');
+    } else {
+      seek(Math.max(0, lineTime - offset));
+    }
+  };
+
+  // Admin: bake the offset into the stored timestamps so every listener gets the corrected timing.
+  const saveOffset = async () => {
+    setSavingOffset(true);
+    try {
+      const syncedLyrics = toShiftedLrc(lines, -offset);
+      const form = new FormData();
+      form.append('syncedLyrics', syncedLyrics);
+      await adminService.updateSong(currentSong.id, form);
+      setFoundLyrics({ ...(lyrics as Lyrics), syncedLyrics, isSynced: true });
+      setOffset(0);
+      setOffsetNote('Đã lưu, mọi người sẽ thấy lời khớp nhạc.');
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.songDetail(currentSong.id) });
+    } catch (err: any) {
+      setOffsetNote(err.response?.data?.message || 'Không lưu được.');
+    } finally {
+      setSavingOffset(false);
+    }
   };
 
   if (isLoading && !lyrics) {
@@ -175,8 +212,10 @@ const KaraokeBody: React.FC = () => {
                   )}
                   <div
                     ref={isActive ? activeLineRef : null}
-                    onClick={() => seek(Math.max(0, line.time - offset))}
+                    onClick={() => onLineClick(line.time)}
                     className={`cursor-pointer origin-left font-extrabold leading-snug tracking-tight transition-all duration-300 text-2xl md:text-4xl ${
+                      syncMode ? 'hover:outline hover:outline-2 hover:outline-amber-300/70 rounded-lg ' : ''
+                    }${
                       isActive ? 'scale-100 blur-0' : isPassed ? 'scale-95 opacity-60 hover:opacity-90' : 'scale-95 opacity-40 blur-[1px] hover:opacity-80 hover:blur-0'
                     }`}
                     style={{
@@ -216,17 +255,47 @@ const KaraokeBody: React.FC = () => {
           />
           <span className="w-10">{formatDuration(duration)}</span>
         </div>
+        {lines.length > 0 && (syncMode || offsetNote || (isAdmin && offset !== 0)) && (
+          <div className="flex flex-wrap items-center justify-center gap-2 text-xs">
+            {syncMode && <span className="text-amber-200">Chạm vào dòng mà ca sĩ đang hát ngay lúc này…</span>}
+            {!syncMode && isAdmin && offset !== 0 && (
+              <button
+                onClick={saveOffset}
+                disabled={savingOffset}
+                className="rounded-full bg-amber-300 text-black px-3 py-1 font-bold disabled:opacity-60"
+              >
+                {savingOffset ? 'Đang lưu…' : 'Lưu độ lệch cho mọi người'}
+              </button>
+            )}
+            {offsetNote && <span className="text-emerald-300">{offsetNote}</span>}
+          </div>
+        )}
         <div className="flex items-center justify-between">
           {lines.length > 0 ? (
-            <div className="flex items-center gap-1 text-xs text-text-muted" title="Chỉnh lời nhanh/chậm hơn nhạc">
+            <div className="flex items-center gap-0.5 text-xs text-text-muted" title="Chỉnh lời nhanh/chậm hơn nhạc">
+              <button onClick={() => setOffset((o) => o - 1)} aria-label="Lời chậm lại 1 giây" className="px-1.5 py-2 rounded-full hover:bg-white/10 hover:text-white font-mono">
+                -1s
+              </button>
               <button onClick={() => setOffset((o) => o - 0.25)} aria-label="Lời chậm lại" className="p-2 rounded-full hover:bg-white/10 hover:text-white">
                 <Minus className="w-3.5 h-3.5" />
               </button>
-              <span className="w-20 text-center font-mono">
+              <span className="w-16 text-center font-mono">
                 {offset === 0 ? 'Đồng bộ' : `${offset > 0 ? '+' : ''}${offset.toFixed(2)}s`}
               </span>
               <button onClick={() => setOffset((o) => o + 0.25)} aria-label="Lời nhanh hơn" className="p-2 rounded-full hover:bg-white/10 hover:text-white">
                 <Plus className="w-3.5 h-3.5" />
+              </button>
+              <button onClick={() => setOffset((o) => o + 1)} aria-label="Lời nhanh hơn 1 giây" className="px-1.5 py-2 rounded-full hover:bg-white/10 hover:text-white font-mono">
+                +1s
+              </button>
+              <button
+                onClick={() => setSyncMode((v) => !v)}
+                aria-pressed={syncMode}
+                className={`ml-1 px-2.5 py-1 rounded-full border text-[11px] font-semibold ${
+                  syncMode ? 'bg-amber-300 text-black border-amber-300' : 'border-white/15 text-white/80 hover:bg-white/10'
+                }`}
+              >
+                Canh lời
               </button>
             </div>
           ) : <span />}
