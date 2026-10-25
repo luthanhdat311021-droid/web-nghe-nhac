@@ -3,8 +3,9 @@ import { Link } from 'react-router-dom';
 import { Crown, Check, Music2, QrCode } from 'lucide-react';
 import api from '../services/api.js';
 import { useAuthStore } from '../store/authStore.js';
+import { FREE_PLAYLIST_LIMIT } from '../services/playlist.service.js';
 
-type Status = { isPro: boolean; proExpiresAt: string | null; used: number; limit: number; paymentEnabled: boolean };
+type Status = { isPro: boolean; proExpiresAt: string | null; used: number; limit: number; playlistCount: number; playlistLimit: number; paymentEnabled: boolean };
 type Order = { id: string; code: string; amount: number; status: string; expiresAt: string; qrUrl: string; bank: string; accountNumber: string };
 export const MusicPro: React.FC = () => {
   const token = useAuthStore(s => s.token);
@@ -55,15 +56,16 @@ export const MusicPro: React.FC = () => {
     <div className="grid sm:grid-cols-2 gap-4">
       <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 space-y-4">
         <Music2 /><h2 className="text-xl font-bold">Free</h2><p className="text-3xl font-bold">0đ</p>
-        <p>3 lượt nghe mỗi ngày</p><p>Có quảng cáo trước mỗi lượt phát</p>
+        <p>3 lượt nghe mỗi ngày</p><p>Có quảng cáo trước mỗi lượt phát</p><p>Tối đa {FREE_PLAYLIST_LIMIT} playlist</p>
         <p className="text-sm text-text-muted">Hạn mức đặt lại lúc 00:00 giờ Việt Nam. Phát lại hoặc chuyển bài tính một lượt; tạm dừng rồi nghe tiếp không tính thêm.</p>
-        {status && !status.isPro && <p className="text-amber-200">Hôm nay: {status.used}/{status.limit} lượt</p>}
+        {status && !status.isPro && <p className="text-amber-200">Hôm nay: {status.used}/{status.limit} lượt · Playlist: {status.playlistCount}/{status.playlistLimit}</p>}
       </div>
       <div className="rounded-2xl border border-amber-300/40 bg-amber-400/[0.06] p-6 space-y-4">
         <Crown className="text-amber-300" /><h2 className="text-xl font-bold">Music Pro</h2>
         <p><strong className="text-3xl">50.000đ</strong><span className="text-text-muted"> / 30 ngày</span></p>
         <p className="flex gap-2"><Check className="text-emerald-300" /> Nghe nhạc không giới hạn</p>
         <p className="flex gap-2"><Check className="text-emerald-300" /> Không quảng cáo của MusicWave</p>
+        <p className="flex gap-2"><Check className="text-emerald-300" /> Tạo playlist không giới hạn</p>
         <p className="text-sm text-text-muted">Thanh toán một lần bằng QR chuyển khoản, không tự động trừ tiền. Có thể mua lại sau khi gói hết hạn.</p>
         {!token ? <Link to="/login" className="block rounded-xl bg-amber-300 text-black p-3 text-center font-bold">Đăng nhập để nâng cấp</Link> :
           status?.isPro ? <p className="flex items-center justify-center gap-2 rounded-xl border border-emerald-300/40 bg-emerald-400/10 text-emerald-300 p-3 font-bold"><Check className="w-5 h-5" /> Bạn đang dùng Music Pro</p> :

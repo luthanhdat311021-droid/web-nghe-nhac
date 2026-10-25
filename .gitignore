@@ -52,3 +52,6 @@ server/prisma/*.db
 .vercel
 .env*
 !.env.example
+
+# Local FoodGo backup (contains personal data and secrets)
+foodgo-backup/

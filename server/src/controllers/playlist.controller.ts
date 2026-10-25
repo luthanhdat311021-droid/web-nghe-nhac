@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../services/prisma.js';
 import { sendError, sendSuccess } from '../utils/response.js';
 import { AuthenticatedRequest } from '../types/index.js';
+import { FREE_PLAYLIST_LIMIT, isPro } from '../services/musicPolicy.js';
 
 const createPlaylistSchema = z.object({
   title: z.string().min(1, 'Playlist title is required').max(60),
@@ -118,18 +119,29 @@ export const createPlaylist = async (req: AuthenticatedRequest, res: Response) =
     const validated = createPlaylistSchema.parse(req.body);
     const userId = req.user!.userId;
 
-    const playlist = await prisma.playlist.create({
-      data: {
-        title: validated.title,
-        description: validated.description,
-        isPublic: validated.isPublic ?? true,
-        coverUrl: validated.coverUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80',
-        userId,
-      },
-      include: {
-        _count: { select: { songs: true } },
-      },
+    const playlist = await prisma.$transaction(async (tx) => {
+      // Lock the user row so parallel requests cannot slip past the Free limit.
+      await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId} FOR UPDATE`;
+      const user = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { role: true, proExpiresAt: true } });
+      if (user.role !== 'ADMIN' && !isPro(user.proExpiresAt) &&
+          await tx.playlist.count({ where: { userId } }) >= FREE_PLAYLIST_LIMIT) return null;
+      return tx.playlist.create({
+        data: {
+          title: validated.title,
+          description: validated.description,
+          isPublic: validated.isPublic ?? true,
+          coverUrl: validated.coverUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80',
+          userId,
+        },
+        include: {
+          _count: { select: { songs: true } },
+        },
+      });
     });
+
+    if (!playlist) {
+      return sendError(res, `Tài khoản Free chỉ tạo được tối đa ${FREE_PLAYLIST_LIMIT} playlist. Nâng cấp Music Pro để tạo không giới hạn.`, 403);
+    }
 
     return sendSuccess(res, playlist, 'Playlist created successfully', 201);
   } catch (error: any) {

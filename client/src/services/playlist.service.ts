@@ -1,6 +1,9 @@
 import api from './api.js';
 import { ApiResponse, Playlist } from '../types/index.js';
 
+// Mirrors FREE_PLAYLIST_LIMIT on the server; the server is what enforces it.
+export const FREE_PLAYLIST_LIMIT = 3;
+
 export const playlistService = {
   async getUserPlaylists() {
     const res = await api.get<ApiResponse<Playlist[]>>('/playlists');

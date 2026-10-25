@@ -6,7 +6,7 @@ import { prisma } from '../services/prisma.js';
 import { requireAuth } from '../middleware/auth.js';
 import { AuthenticatedRequest } from '../types/index.js';
 import { sendSuccess, sendError } from '../utils/response.js';
-import { AD_SECONDS, FREE_LIMIT, PAYMENT_CLOCK_SKEW_MS, PRO_DAYS, PRO_PRICE, extendPro, isPro, paymentCode, vietnamDay } from '../services/musicPolicy.js';
+import { AD_SECONDS, FREE_LIMIT, FREE_PLAYLIST_LIMIT, PAYMENT_CLOCK_SKEW_MS, PRO_DAYS, PRO_PRICE, extendPro, isPro, paymentCode, vietnamDay } from '../services/musicPolicy.js';
 import { config } from '../config/index.js';
 
 const router = Router();
@@ -25,8 +25,10 @@ router.use((_req, res, next) => { res.setHeader('Cache-Control', 'private, no-st
 router.get('/status', requireAuth, wrap(async (req, res) => {
   const user = await prisma.user.findUniqueOrThrow({ where: { id: req.user!.userId } });
   const usage = await prisma.dailyUsage.findUnique({ where: { userId_day: { userId: user.id, day: vietnamDay() } } });
+  const playlistCount = await prisma.playlist.count({ where: { userId: user.id } });
   return sendSuccess(res, { isPro: isPro(user.proExpiresAt), proExpiresAt: user.proExpiresAt,
     used: usage?.count || 0, limit: FREE_LIMIT, price: PRO_PRICE, days: PRO_DAYS,
+    playlistCount, playlistLimit: FREE_PLAYLIST_LIMIT,
     paymentEnabled: !!process.env.SEPAY_WEBHOOK_KEY });
 }));
 

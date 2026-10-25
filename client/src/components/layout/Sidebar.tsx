@@ -21,6 +21,7 @@ import { Playlist } from '../../types/index.js';
 import { Modal } from '../common/Modal.js';
 import { Button } from '../common/Button.js';
 import { Input } from '../common/Input.js';
+import { PlaylistCreateError } from '../common/PlaylistCreateError.js';
 import { QUERY_KEYS, queryClient } from '../../services/queryClient.js';
 import { prefetchRoute } from '../../services/prefetch.js';
 
@@ -31,6 +32,7 @@ export const Sidebar: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [playlistTitle, setPlaylistTitle] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+  const [createError, setCreateError] = useState<unknown>(null);
 
   const { data: playlists = [] } = useQuery<Playlist[]>({
     queryKey: QUERY_KEYS.userPlaylists,
@@ -44,12 +46,13 @@ export const Sidebar: React.FC = () => {
     if (!playlistTitle.trim()) return;
     try {
       setIsCreating(true);
+      setCreateError(null);
       const newPl = await playlistService.createPlaylist({ title: playlistTitle.trim() });
       queryClient.setQueryData<Playlist[]>(QUERY_KEYS.userPlaylists, (old = []) => [newPl, ...old]);
       setPlaylistTitle('');
       setShowCreateModal(false);
     } catch (err) {
-      console.error(err);
+      setCreateError(err);
     } finally {
       setIsCreating(false);
     }
@@ -172,7 +175,7 @@ export const Sidebar: React.FC = () => {
               </span>
               {isAuthenticated && (
                 <button
-                  onClick={() => setShowCreateModal(true)}
+                  onClick={() => { setCreateError(null); setShowCreateModal(true); }}
                   aria-label="Tạo danh sách phát"
                   className="p-1 rounded-lg text-text-muted hover:text-white hover:bg-white/10 transition-colors"
                 >
@@ -240,6 +243,7 @@ export const Sidebar: React.FC = () => {
             autoFocus
             required
           />
+          <PlaylistCreateError error={createError} onUpgrade={() => setShowCreateModal(false)} />
           <div className="flex justify-end gap-2 pt-2">
             <Button
               type="button"

@@ -12,6 +12,9 @@ import { Modal } from '../components/common/Modal.js';
 import { Button } from '../components/common/Button.js';
 import { Input } from '../components/common/Input.js';
 import { QUERY_KEYS, queryClient } from '../services/queryClient.js';
+import { PlaylistCreateError } from '../components/common/PlaylistCreateError.js';
+import { isProUser } from '../store/audioFxStore.js';
+import { FREE_PLAYLIST_LIMIT } from '../services/playlist.service.js';
 
 type TabType = 'all' | 'playlists' | 'favorites' | 'history';
 
@@ -23,6 +26,9 @@ export const Library: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+  const [createError, setCreateError] = useState<unknown>(null);
+  useAuthStore((s) => s.user?.proExpiresAt);
+  const limitedPlaylists = useAuthStore((s) => s.user?.role) !== 'ADMIN' && !isProUser();
 
   const { data: playlists = [] } = useQuery<Playlist[]>({
     queryKey: QUERY_KEYS.userPlaylists,
@@ -55,12 +61,13 @@ export const Library: React.FC = () => {
     if (!newTitle.trim()) return;
     try {
       setIsCreating(true);
+      setCreateError(null);
       const newPl = await playlistService.createPlaylist({ title: newTitle.trim() });
       queryClient.setQueryData<Playlist[]>(QUERY_KEYS.userPlaylists, (old = []) => [newPl, ...old]);
       setNewTitle('');
       setShowCreateModal(false);
     } catch (e) {
-      console.error(e);
+      setCreateError(e);
     } finally {
       setIsCreating(false);
     }
@@ -99,7 +106,7 @@ export const Library: React.FC = () => {
         </div>
 
         <Button
-          onClick={() => setShowCreateModal(true)}
+          onClick={() => { setCreateError(null); setShowCreateModal(true); }}
           variant="secondary"
           size="sm"
           leftIcon={<Plus className="w-3.5 h-3.5" />}
@@ -151,6 +158,11 @@ export const Library: React.FC = () => {
               <ListMusic className="w-4 h-4 text-text-muted" />
               <span>Danh sách phát</span>
             </h2>
+            {limitedPlaylists && (
+              <Link to="/music-pro" className="text-xs text-amber-200 hover:text-amber-100 transition-colors">
+                Free: {playlists.length}/{FREE_PLAYLIST_LIMIT} playlist · Pro không giới hạn
+              </Link>
+            )}
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
@@ -243,6 +255,7 @@ export const Library: React.FC = () => {
             autoFocus
             required
           />
+          <PlaylistCreateError error={createError} onUpgrade={() => setShowCreateModal(false)} />
           <div className="flex justify-end gap-2 pt-2">
             <Button
               type="button"

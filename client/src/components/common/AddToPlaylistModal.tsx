@@ -3,6 +3,7 @@ import { Plus, Check, ListMusic } from 'lucide-react';
 import { Modal } from './Modal.js';
 import { Button } from './Button.js';
 import { Input } from './Input.js';
+import { PlaylistCreateError } from './PlaylistCreateError.js';
 import { Playlist, Song } from '../../types/index.js';
 import { playlistService } from '../../services/playlist.service.js';
 import { useAuthStore } from '../../store/authStore.js';
@@ -25,6 +26,7 @@ export const AddToPlaylistModal: React.FC<AddToPlaylistModalProps> = ({
   const [showCreate, setShowCreate] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<unknown>(null);
 
   useEffect(() => {
     if (isOpen && isAuthenticated) {
@@ -62,6 +64,7 @@ export const AddToPlaylistModal: React.FC<AddToPlaylistModalProps> = ({
     if (!newTitle.trim() || !song) return;
     try {
       setCreating(true);
+      setCreateError(null);
       const newPlaylist = await playlistService.createPlaylist({
         title: newTitle.trim(),
         coverUrl: song.coverUrl,
@@ -72,7 +75,7 @@ export const AddToPlaylistModal: React.FC<AddToPlaylistModalProps> = ({
       setNewTitle('');
       setShowCreate(false);
     } catch (e) {
-      console.error(e);
+      setCreateError(e);
     } finally {
       setCreating(false);
     }
@@ -99,7 +102,7 @@ export const AddToPlaylistModal: React.FC<AddToPlaylistModalProps> = ({
         {/* Create new playlist toggle */}
         {!showCreate ? (
           <Button
-            onClick={() => setShowCreate(true)}
+            onClick={() => { setCreateError(null); setShowCreate(true); }}
             variant="secondary"
             size="sm"
             className="w-full justify-center"
@@ -115,6 +118,7 @@ export const AddToPlaylistModal: React.FC<AddToPlaylistModalProps> = ({
               onChange={(e) => setNewTitle(e.target.value)}
               autoFocus
             />
+            <PlaylistCreateError error={createError} onUpgrade={onClose} />
             <div className="flex justify-end gap-2">
               <Button
                 type="button"
