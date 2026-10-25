@@ -190,7 +190,7 @@ export const Library: React.FC = () => {
                 </div>
                 <div>
                   <h3 className="font-bold text-sm text-white truncate">{pl.title}</h3>
-                  <p className="text-xs text-text-muted mt-0.5">Playlist</p>
+                  <p className="text-xs text-text-muted mt-0.5">{pl._count?.songs ?? 0} bài hát</p>
                 </div>
               </Link>
             ))}
