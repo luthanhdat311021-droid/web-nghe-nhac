@@ -46,7 +46,7 @@ const Landing: React.FC = () => {
           Tạo phòng, gửi link cho bạn bè. Mọi người nghe cùng một bài, cùng một giây, cùng thêm bài và trò chuyện.
         </p>
       </div>
-      <div className="grid sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 space-y-4">
           <h2 className="text-lg font-bold text-white">Tạo phòng mới</h2>
           <p className="text-sm text-text-muted">Bạn là chủ phòng: nhạc bạn phát sẽ được phát cho mọi người trong phòng.</p>
@@ -189,7 +189,8 @@ const Room: React.FC<{ code: string }> = ({ code }) => {
   const shownPlaying = isHost ? isPlaying : roomPlaying;
 
   return (
-    <div className="max-w-6xl mx-auto pb-12 grid lg:grid-cols-[1fr_360px] gap-5">
+    // minmax(0, …) columns: a long song title must truncate, not widen the page past a phone screen.
+    <div className="max-w-6xl mx-auto pb-12 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-5">
       <div className="space-y-5 min-w-0">
         <div className="rounded-2xl border border-emerald-300/20 bg-gradient-to-br from-emerald-400/10 to-transparent p-5 flex flex-wrap items-center gap-4 justify-between">
           <div>

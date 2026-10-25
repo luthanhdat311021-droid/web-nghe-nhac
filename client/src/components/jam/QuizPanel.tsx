@@ -76,7 +76,7 @@ export const QuizPanel: React.FC = () => {
       )}
 
       {quiz && quiz.options.length > 0 && (
-        <div className="grid sm:grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {quiz.options.map((option, i) => {
             const isCorrect = quiz.correctId === option.id;
             const isMine = quiz.myChoiceId === option.id;
@@ -96,13 +96,13 @@ export const QuizPanel: React.FC = () => {
                   const result = await answerQuiz(option.id);
                   setNotice(result.correct ? `Chuẩn! +${result.points} điểm` : 'Chưa đúng rồi… chờ đáp án nhé.');
                 })}
-                className={`flex items-center gap-3 rounded-xl border p-3 text-left transition-colors disabled:cursor-default ${tone}`}
+                className={`flex min-w-0 items-center gap-3 rounded-xl border p-3 text-left transition-colors disabled:cursor-default ${tone}`}
               >
                 <span className="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center text-xs font-black text-white flex-shrink-0">
                   {String.fromCharCode(65 + i)}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-semibold text-white truncate">{option.title}</span>
+                  <span className="text-sm font-semibold text-white line-clamp-2 break-words">{option.title}</span>
                   <span className="block text-xs text-text-muted truncate">{option.artistName}</span>
                 </span>
                 {showResult && isCorrect && <Check className="w-4 h-4 text-emerald-300 flex-shrink-0" />}
