@@ -3,9 +3,10 @@ import path from 'node:path';
 import os from 'node:os';
 
 const getStorageConfig = () => ({
-  url: process.env.SUPABASE_URL?.replace(/\/$/, ''),
-  key: process.env.SUPABASE_SERVICE_ROLE_KEY,
-  bucket: process.env.SUPABASE_STORAGE_BUCKET || 'musicwave-media',
+  // Values pasted into dashboards often carry a stray newline or space.
+  url: process.env.SUPABASE_URL?.trim().replace(/\/$/, ''),
+  key: process.env.SUPABASE_SERVICE_ROLE_KEY?.trim(),
+  bucket: process.env.SUPABASE_STORAGE_BUCKET?.trim() || 'musicwave-media',
 });
 
 let isBucketChecked = false;
