@@ -58,6 +58,16 @@ test('storage refusing to sign reports 503 so small files can fall back to the s
   signFails = false;
 });
 
+test('an unreachable storage host answers 503 instead of hanging the request', async () => {
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async () => { throw new TypeError('fetch failed'); }) as any;
+  try {
+    assert.equal((await call(createMediaUploadUrl, { kind: 'audio', fileName: 'a.mp3', contentType: 'audio/mpeg' })).status, 503);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
 test('import only accepts audio/cover URLs from our own bucket', async () => {
   assert.equal((await call(importSingleSong, { title: 'x', artistName: 'y', audioUrl: 'https://evil.test/a.mp3' })).status, 400);
   assert.equal((await call(importSingleSong, { title: 'x', artistName: 'y',

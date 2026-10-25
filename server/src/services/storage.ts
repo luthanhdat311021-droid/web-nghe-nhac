@@ -19,6 +19,7 @@ const ensureBucketExists = async (url: string, key: string, bucket: string) => {
   try {
     const checkRes = await fetch(`${url}/storage/v1/bucket/${encodeURIComponent(bucket)}`, {
       headers: authHeaders(key),
+      signal: AbortSignal.timeout(15_000),
     });
     if (!checkRes.ok && (checkRes.status === 404 || checkRes.status === 400)) {
       await fetch(`${url}/storage/v1/bucket`, {
@@ -87,10 +88,18 @@ export const createSignedUpload = async (objectPath: string) => {
   if (!url || !key) return null;
   const sanitizedPath = objectPath.replace(/\.\./g, '').replace(/^[/\\]+/, '');
   await ensureBucketExists(url, key, bucket);
-  const response = await fetch(`${url}/storage/v1/object/upload/sign/${encodeURIComponent(bucket)}/${sanitizedPath}`, {
-    method: 'POST',
-    headers: { ...authHeaders(key), 'x-upsert': 'true' },
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${url}/storage/v1/object/upload/sign/${encodeURIComponent(bucket)}/${sanitizedPath}`, {
+      method: 'POST',
+      headers: { ...authHeaders(key), 'x-upsert': 'true' },
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch (err) {
+    // Unreachable host (wrong SUPABASE_URL) or timeout: report it instead of leaving the request hanging.
+    console.warn('[Supabase Storage] createSignedUpload unreachable:', err);
+    return null;
+  }
   if (!response.ok) {
     console.warn(`[Supabase Storage] createSignedUpload failed (${response.status}): ${(await response.text()).slice(0, 200)}`);
     return null;

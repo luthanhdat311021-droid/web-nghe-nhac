@@ -21,7 +21,8 @@ const SERVER_UPLOAD_LIMIT = 4 * 1024 * 1024;
 export const uploadToStorage = async (
   file: File,
   kind: 'audio' | 'cover',
-  meta: { title?: string; artistName?: string; albumTitle?: string } = {}
+  meta: { title?: string; artistName?: string; albumTitle?: string } = {},
+  onProgress?: (loaded: number, total: number) => void
 ): Promise<string | null> => {
   let signed: { uploadUrl: string; publicUrl: string };
   try {
@@ -36,12 +37,21 @@ export const uploadToStorage = async (
     }
     throw err;
   }
-  const put = await fetch(signed.uploadUrl, {
-    method: 'PUT',
-    headers: { 'content-type': file.type || 'application/octet-stream', 'x-upsert': 'true' },
-    body: file,
+  // XMLHttpRequest rather than fetch: only it reports upload progress, which big files on slow links need.
+  await new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', signed.uploadUrl);
+    xhr.setRequestHeader('content-type', file.type || 'application/octet-stream');
+    xhr.setRequestHeader('x-upsert', 'true');
+    xhr.timeout = 15 * 60 * 1000;
+    xhr.upload.onprogress = (e) => onProgress?.(e.loaded, e.lengthComputable ? e.total : file.size);
+    xhr.onload = () => (xhr.status >= 200 && xhr.status < 300
+      ? resolve()
+      : reject(new Error(`Tải tệp lên kho lưu trữ thất bại (${xhr.status}).`)));
+    xhr.onerror = () => reject(new Error('Mất kết nối khi tải tệp lên kho lưu trữ.'));
+    xhr.ontimeout = () => reject(new Error('Tải tệp lên quá lâu, vui lòng thử lại.'));
+    xhr.send(file);
   });
-  if (!put.ok) throw new Error(`Tải tệp lên kho lưu trữ thất bại (${put.status}).`);
   return signed.publicUrl;
 };
 

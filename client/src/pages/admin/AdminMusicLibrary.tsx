@@ -44,14 +44,31 @@ import { queryClient } from '../../services/queryClient.js';
 
 type TabType = 'library' | 'upload' | 'history';
 
+const formatMB = (bytes: number) => (bytes / 1048576).toFixed(1);
+
+/** Turns raw upload events into "45% · 3.2/7.1 MB · 520 KB/s", at most a few times per second. */
+const uploadReporter = (onUpdate: (percent: number, info: string) => void) => {
+  const startedAt = Date.now();
+  let lastAt = 0;
+  return (loaded: number, total: number) => {
+    const now = Date.now();
+    if (now - lastAt < 300 && loaded < total) return;
+    lastAt = now;
+    const percent = total ? Math.round((loaded / total) * 100) : 0;
+    const speed = loaded / Math.max(0.5, (now - startedAt) / 1000);
+    const left = speed > 0 ? Math.ceil((total - loaded) / speed) : 0;
+    onUpdate(percent, `${percent}% · ${formatMB(loaded)}/${formatMB(total)} MB · ${Math.round(speed / 1024)} KB/s${left > 1 ? ` · còn ~${left}s` : ''}`);
+  };
+};
+
 /** Import request for one queued file: the audio and cover go straight to storage, the server gets their URLs. */
-const buildImportForm = async (item: ParsedAudioMetadata) => {
+const buildImportForm = async (item: ParsedAudioMetadata, onProgress?: (loaded: number, total: number) => void) => {
   const formData = new FormData();
   const meta = { title: item.title.trim(), artistName: item.artist.trim(), albumTitle: item.album?.trim() || undefined };
   // A duplicate that will be skipped needs no upload at all.
   const skipping = item.duplicateStatus === 'DUPLICATE' && (item.duplicateAction || 'skip') === 'skip';
   if (!skipping) {
-    const audioUrl = await uploadToStorage(item.file, 'audio', meta);
+    const audioUrl = await uploadToStorage(item.file, 'audio', meta, onProgress);
     if (audioUrl) formData.append('audioUrl', audioUrl);
     else formData.append('audioFile', item.file);
     if (item.coverFile) {
@@ -77,6 +94,7 @@ interface BatchUploadItemState {
   status: 'PENDING' | 'UPLOADING' | 'SUCCESS' | 'SKIPPED' | 'FAILED';
   progress: number;
   errorMessage?: string;
+  uploadInfo?: string;
   songId?: string;
 }
 
@@ -335,6 +353,12 @@ export const AdminMusicLibrary: React.FC = () => {
   // =========================================================================
   // BATCH IMPORT EXECUTION (CONCURRENT QUEUE)
   // =========================================================================
+  const setItemProgress = (idx: number, progress: number, uploadInfo: string) =>
+    setBatchItemsState((prev) => prev.map((s, i) => (i === idx && s.status === 'UPLOADING' ? { ...s, progress, uploadInfo } : s)));
+  // Uploading the file is most of the work: map it onto 2–92% of the item's bar.
+  const reportProgress = (idx: number) =>
+    uploadReporter((percent, info) => setItemProgress(idx, 2 + Math.round(percent * 0.9), info));
+
   const startBatchImport = async () => {
     if (parsedQueue.length === 0) return;
 
@@ -374,13 +398,16 @@ export const AdminMusicLibrary: React.FC = () => {
           const next = [...prev];
           if (next[idx]) {
             next[idx].status = 'UPLOADING';
-            next[idx].progress = 20;
+            next[idx].progress = 2;
+            next[idx].uploadInfo = 'Đang chuẩn bị…';
           }
           return next;
         });
 
         try {
-          const res = await adminService.importSingleSong(await buildImportForm(queueItem));
+          const form = await buildImportForm(queueItem, reportProgress(idx));
+          setItemProgress(idx, 95, 'Đang lưu vào cơ sở dữ liệu…');
+          const res = await adminService.importSingleSong(form);
 
           if (res.data?.status === 'SKIPPED') {
             skippedCount++;
@@ -481,12 +508,16 @@ export const AdminMusicLibrary: React.FC = () => {
     setBatchItemsState((prev) => {
       const next = [...prev];
       next[index].status = 'UPLOADING';
+      next[index].progress = 2;
       next[index].errorMessage = undefined;
+      next[index].uploadInfo = 'Đang chuẩn bị…';
       return next;
     });
 
     try {
-      const res = await adminService.importSingleSong(await buildImportForm(target.item));
+      const form = await buildImportForm(target.item, reportProgress(index));
+      setItemProgress(index, 95, 'Đang lưu vào cơ sở dữ liệu…');
+      const res = await adminService.importSingleSong(form);
 
       setBatchItemsState((prev) => {
         const next = [...prev];
@@ -510,7 +541,8 @@ export const AdminMusicLibrary: React.FC = () => {
     if (batchItemsState.length === 0) return { percent: 0, done: 0, total: 0 };
     const done = batchItemsState.filter((i) => i.status === 'SUCCESS' || i.status === 'SKIPPED' || i.status === 'FAILED').length;
     const total = batchItemsState.length;
-    const percent = Math.round((done / total) * 100);
+    // Count partial uploads too, so a single large file does not sit at 0% until it finishes.
+    const percent = Math.round(batchItemsState.reduce((sum, i) => sum + (i.status === 'PENDING' ? 0 : i.progress), 0) / total);
     return { percent, done, total };
   }, [batchItemsState]);
 
@@ -1341,8 +1373,16 @@ export const AdminMusicLibrary: React.FC = () => {
                           </span>
                         </p>
                         <p className="text-[11px] text-text-muted truncate font-mono">
-                          {state.item.file.name}
+                          {state.item.file.name} · {formatMB(state.item.file.size)} MB
                         </p>
+                        {state.status === 'UPLOADING' && (
+                          <div className="mt-1.5 space-y-1 max-w-sm">
+                            <div className="h-1 rounded-full bg-white/10 overflow-hidden">
+                              <div className="h-full bg-amber-400 transition-[width] duration-300" style={{ width: `${state.progress}%` }} />
+                            </div>
+                            {state.uploadInfo && <p className="text-[11px] text-amber-200 font-mono">{state.uploadInfo}</p>}
+                          </div>
+                        )}
                       </div>
                     </div>
 

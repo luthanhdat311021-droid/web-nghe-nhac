@@ -954,8 +954,8 @@ export const createMediaUploadUrl = async (req: AuthenticatedRequest, res: Respo
   const objectPath = kind === 'audio'
     ? buildSafeAudioPath(artistName || 'unknown-artist', albumTitle, songTitle, ext)
     : `covers/${sanitizeSlug(artistName || 'unknown-artist')}/${sanitizeSlug(songTitle)}-${Date.now()}${ext}`;
-  const signed = await createSignedUpload(objectPath);
-  if (!signed) return sendError(res, 'Kho lưu trữ Supabase chưa sẵn sàng (kiểm tra SUPABASE_SERVICE_ROLE_KEY).', 503);
+  const signed = await createSignedUpload(objectPath).catch(() => null);
+  if (!signed) return sendError(res, 'Kho lưu trữ Supabase chưa sẵn sàng (kiểm tra SUPABASE_URL và SUPABASE_SERVICE_ROLE_KEY).', 503);
   return sendSuccess(res, signed);
 };
 
