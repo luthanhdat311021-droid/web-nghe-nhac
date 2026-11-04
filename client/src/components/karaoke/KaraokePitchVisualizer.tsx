@@ -5,6 +5,7 @@ import {
   DetectedPitch,
   LineMelody,
   pitchDistanceInSemitones,
+  foldToOctaveOf,
   TargetMelodyNote,
 } from '../../utils/pitchDetector.js';
 import {
@@ -64,20 +65,22 @@ export const KaraokePitchVisualizer: React.FC<KaraokePitchVisualizerProps> = ({
     const diff = pitchDistanceInSemitones(livePitch.midi, currentNote.midi);
     return {
       diff,
-      isPerfect: diff <= 0.6,
-      isGood: diff <= 1.4,
+      isPerfect: diff <= 0.5,
+      isGood: diff <= 1,
     };
   }, [livePitch, currentNote]);
 
-  // Quãng MIDI hiển thị trên dải Pitch Stage (C4=60 đến C5=72)
-  const MIN_MIDI = 58; // Bb3
-  const MAX_MIDI = 74; // D5
-  const MIDI_RANGE = MAX_MIDI - MIN_MIDI;
+  // The stage is a window of ±7 semitones around the singer's note (or the user's, before the singer is heard).
+  // The user's note is moved to the singer's octave, since any octave counts as correct.
+  const centerMidi = currentNote?.midi ?? livePitch?.midi ?? 64;
+  const MIN_MIDI = centerMidi - 7;
+  const MIDI_RANGE = 14;
+  const userMidi = livePitch ? (currentNote ? foldToOctaveOf(livePitch.midi, currentNote.midi) : livePitch.midi) : null;
 
-  // Đổi MIDI sang phần trăm vị trí theo chiều dọc (trục Y từ dưới lên)
+  // Đổi MIDI sang phần trăm vị trí theo chiều dọc (trục Y từ dưới lên), chừa hàng chữ ở đáy
   const midiToPercentY = (midi: number) => {
-    const clamped = Math.max(MIN_MIDI, Math.min(MAX_MIDI, midi));
-    return ((clamped - MIN_MIDI) / MIDI_RANGE) * 100;
+    const k = Math.max(0, Math.min(1, (midi - MIN_MIDI) / MIDI_RANGE));
+    return 24 + k * 64;
   };
 
   return (
@@ -184,21 +187,16 @@ export const KaraokePitchVisualizer: React.FC<KaraokePitchVisualizerProps> = ({
 
       {/* Main Pitch Stage (Pitch Guide Bars & User Pitch Pointer) */}
       <div className="relative z-10 h-28 sm:h-32 w-full mt-3 rounded-xl bg-black/40 border border-white/5 overflow-hidden flex flex-col justify-between p-2">
-        {/* Subtle Guidelines for Notes */}
-        <div className="absolute inset-0 flex flex-col justify-between py-2 pointer-events-none opacity-20">
-          <div className="w-full border-b border-dashed border-white/30 flex justify-between px-2 text-[9px] font-mono">
-            <span>C5</span>
+        {/* Singer's note right now: the line the user aims for */}
+        {isMicOn && currentNote && (
+          <div
+            className="absolute left-0 right-0 z-10 pointer-events-none flex items-center transition-[bottom] duration-150"
+            style={{ bottom: `${midiToPercentY(currentNote.midi)}%` }}
+          >
+            <div className="flex-1 h-[3px] rounded-full bg-amber-300/70 shadow-[0_0_10px_rgba(252,211,77,0.6)]" />
+            <span className="ml-1 mr-2 text-[9px] font-bold text-amber-200">Ca sĩ</span>
           </div>
-          <div className="w-full border-b border-dashed border-white/30 flex justify-between px-2 text-[9px] font-mono">
-            <span>A4</span>
-          </div>
-          <div className="w-full border-b border-dashed border-white/30 flex justify-between px-2 text-[9px] font-mono">
-            <span>F4</span>
-          </div>
-          <div className="w-full border-b border-dashed border-white/30 flex justify-between px-2 text-[9px] font-mono">
-            <span>C4</span>
-          </div>
-        </div>
+        )}
 
         {/* Target Note Blocks of Current Line */}
         {activeLineMelody && (
@@ -212,8 +210,6 @@ export const KaraokePitchVisualizer: React.FC<KaraokePitchVisualizerProps> = ({
                 isMicOn && isVoicePacing
                   ? nIdx < sungWordIndex
                   : currentTime >= note.startSec + note.durationSec;
-              const yPercent = midiToPercentY(note.midi);
-
               // Tọa độ X tương đối trong dòng
               const lineDur = Math.max(1, activeLineMelody.endSec - activeLineMelody.startSec);
               const xStartPercent =
@@ -233,7 +229,7 @@ export const KaraokePitchVisualizer: React.FC<KaraokePitchVisualizerProps> = ({
                       : 'bg-white/10 text-white/70 border border-white/10'
                   }`}
                   style={{
-                    bottom: `${Math.max(4, Math.min(80, yPercent))}%`,
+                    bottom: '4%',
                     left: `${Math.max(2, Math.min(92, xStartPercent))}%`,
                     width: `${Math.max(6, Math.min(40, widthPercent - 1))}%`,
                   }}
@@ -246,11 +242,11 @@ export const KaraokePitchVisualizer: React.FC<KaraokePitchVisualizerProps> = ({
         )}
 
         {/* User Realtime Pitch Dot & Particle Wave */}
-        {isMicOn && livePitch?.isVoiced && (
+        {isMicOn && livePitch?.isVoiced && userMidi !== null && (
           <motion.div
             className="absolute z-30 flex items-center"
             style={{
-              bottom: `${Math.max(4, Math.min(88, midiToPercentY(livePitch.midi)))}%`,
+              bottom: `${midiToPercentY(userMidi)}%`,
               left: '48%',
             }}
             transition={{ type: 'spring', damping: 20, stiffness: 300 }}
@@ -314,8 +310,11 @@ export const KaraokePitchVisualizer: React.FC<KaraokePitchVisualizerProps> = ({
           <span>
             {currentNote ? (
               <span className="text-white/80">
-                Nốt chuẩn: <strong className="text-amber-300">{currentNote.noteName}</strong> ({currentNote.word})
+                Nốt ca sĩ: <strong className="text-amber-300">{currentNote.noteName}</strong>
+                {currentNote.word ? ` (${currentNote.word})` : ''}
               </span>
+            ) : activeLineMelody ? (
+              'Đang nghe giai điệu ca sĩ…'
             ) : (
               'Đang chờ nhạc dạo…'
             )}

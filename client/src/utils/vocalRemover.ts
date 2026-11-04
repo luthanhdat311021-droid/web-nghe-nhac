@@ -1,170 +1,140 @@
 /**
  * MusicWave Karaoke Audio Engine
- * Real-time Vocal Remover / Instrumental Beat Extractor using Web Audio API.
- * Uses Out-of-Phase Stereo (OOPS) cancellation with low-frequency bass preservation.
- * Runs 100% in-browser with zero latency.
+ * Real-time vocal remover ("beat only") using the Web Audio API, in the browser with no added latency.
+ *
+ * Vocals are usually mixed dead-centre (identical in left and right), so L − R cancels them while
+ * keeping instruments panned to the sides. Bass and kick are also centred and would vanish too, so the
+ * low end (< 220 Hz) is added back from the original signal.
+ *
+ * A media element accepts only one MediaElementSource ever, so this engine borrows the element's shared
+ * source from the audio FX store (the same one the Music Pro EQ uses) and re-routes it:
+ *   normal:     source ──────────────────────────────────────────────► gain → EQ → out
+ *   beat only:  source → L−R → vocal-band dip ─┬──────────────────────► gain → EQ → out
+ *              source → low-pass 220 Hz ───────┘
  */
+import { getElementAudioNodes } from '../store/audioFxStore.js';
+
+const AUDIO_ID = 'musicwave-html5-audio';
+
+interface CutChain {
+  inputs: AudioNode[]; // what the source feeds in beat mode
+  output: GainNode;
+}
 
 class KaraokeAudioEngine {
-  private audioCtx: AudioContext | null = null;
-  private sourceNode: MediaElementAudioSourceNode | null = null;
   private isBeatModeActive = false;
-  private attachedElement: HTMLMediaElement | null = null;
-
-  // Processing nodes
-  private dryGain: GainNode | null = null;
-  private vocalCutGain: GainNode | null = null;
-  private bassGain: GainNode | null = null;
-  private splitter: ChannelSplitterNode | null = null;
-  private inverter: GainNode | null = null;
-  private merger: ChannelMergerNode | null = null;
-  private bassFilter: BiquadFilterNode | null = null;
-  private vocalBandReject: BiquadFilterNode | null = null;
-  private masterGain: GainNode | null = null;
+  private chains = new WeakMap<HTMLMediaElement, CutChain>();
+  private routedElement: HTMLMediaElement | null = null;
+  // Reference tap: the original mix, band-limited to the singing range, for reading the singer's pitch.
+  // It hangs off the source directly, so it still hears the vocals while beat-only mode removes them.
+  private taps = new WeakMap<HTMLMediaElement, { input: AudioNode; analyser: AnalyserNode }>();
 
   /**
-   * Khởi tạo Web Audio graph cho việc tách lời (Vocal Removal)
+   * Analyser carrying the song's original vocals (mid channel, ~120–1000 Hz), or null when the song cannot be
+   * processed (YouTube, hosts without CORS, iOS). The karaoke scorer reads the singer's pitch from it.
    */
-  public init(audioElement: HTMLMediaElement | null): boolean {
-    if (!audioElement || typeof window === 'undefined') return false;
-    if (this.attachedElement === audioElement && this.audioCtx) return true;
-
-    try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioCtx) return false;
-
-      // Dùng chung hoặc tạo AudioContext mới
-      this.audioCtx = this.audioCtx || new AudioCtx();
-      if (this.audioCtx.state === 'suspended') {
-        this.audioCtx.resume().catch(() => {});
-      }
-
-      this.attachedElement = audioElement;
-
-      // Đảm bảo audio có thuộc tính crossOrigin nếu cần để Web Audio không bị tắt tiếng vì CORS
-      if (!audioElement.crossOrigin && audioElement.src && !audioElement.src.startsWith('blob:') && !audioElement.src.startsWith('data:')) {
-        try {
-          const url = new URL(audioElement.src, window.location.href);
-          if (url.origin !== window.location.origin) {
-            const savedTime = audioElement.currentTime;
-            const wasPlaying = !audioElement.paused;
-            const currentSrc = audioElement.src;
-            audioElement.crossOrigin = 'anonymous';
-            audioElement.src = currentSrc;
-            audioElement.currentTime = savedTime;
-            if (wasPlaying) {
-              audioElement.play().catch(() => {});
-            }
-          }
-        } catch {}
-      }
-
-      // 1. Tạo Source Node từ thẻ Audio
-      // Một thẻ audio chỉ được tạo createMediaElementSource một lần duy nhất
-      if (!this.sourceNode) {
-        this.sourceNode = this.audioCtx.createMediaElementSource(audioElement);
-      }
-
-      // 2. Nhánh DRY (Âm thanh gốc đầy đủ cả lời và beat)
-      this.dryGain = this.audioCtx.createGain();
-      this.dryGain.gain.value = 1.0;
-
-      // 3. Nhánh VOCAL CUT (Tách giọng ca sĩ, chỉ giữ Beat)
-      // Tách kênh Left và Right
-      this.splitter = this.audioCtx.createChannelSplitter(2);
-      this.inverter = this.audioCtx.createGain();
-      this.inverter.gain.value = -1.0; // Đảo pha 180 độ kênh Right
-
-      // Trộn Left + (-Right) = L - R (triệt tiêu tín hiệu trung tâm / vocal)
-      this.merger = this.audioCtx.createChannelMerger(2);
-
-      // Bộ lọc cắt dải tần số giọng hát chính (300Hz - 3400Hz)
-      this.vocalBandReject = this.audioCtx.createBiquadFilter();
-      this.vocalBandReject.type = 'peaking';
-      this.vocalBandReject.frequency.value = 1200;
-      this.vocalBandReject.Q.value = 0.8;
-      this.vocalBandReject.gain.value = -18; // Giảm mạnh giọng hát
-
-      // Bộ lọc bảo toàn âm trầm (Bass / Kick drum / 808 sub) dưới 200Hz không bị mất
-      this.bassFilter = this.audioCtx.createBiquadFilter();
-      this.bassFilter.type = 'lowpass';
-      this.bassFilter.frequency.value = 220;
-      this.bassFilter.Q.value = 1.0;
-
-      this.bassGain = this.audioCtx.createGain();
-      this.bassGain.gain.value = 1.2; // Bù âm lượng bass cho beat đầy đặn
-
-      this.vocalCutGain = this.audioCtx.createGain();
-      this.vocalCutGain.gain.value = 0.0; // Mặc định tắt beat mode
-
-      this.masterGain = this.audioCtx.createGain();
-      this.masterGain.gain.value = 1.0;
-
-      // --- KẾT NỐI ĐỒ THỊ ÂM THANH (AUDIO GRAPH) ---
-      // Nhánh gốc: Source -> dryGain -> masterGain
-      this.sourceNode.connect(this.dryGain);
-      this.dryGain.connect(this.masterGain);
-
-      // Nhánh Vocal Cut:
-      // Source -> splitter:
-      // Channel 0 (L) -> merger (cả 2 kênh L và R)
-      // Channel 1 (R) -> inverter (-1) -> merger
-      this.sourceNode.connect(this.splitter);
-      this.splitter.connect(this.merger, 0, 0); // L vào L
-      this.splitter.connect(this.merger, 0, 1); // L vào R
-      this.splitter.connect(this.inverter, 1);   // R vào Inverter
-      this.inverter.connect(this.merger, 0, 0); // -R vào L
-      this.inverter.connect(this.merger, 0, 1); // -R vào R
-
-      // Tín hiệu đã triệt tiêu giọng hát -> bộ lọc giảm âm -> vocalCutGain -> masterGain
-      this.merger.connect(this.vocalBandReject);
-      this.vocalBandReject.connect(this.vocalCutGain);
-      this.vocalCutGain.connect(this.masterGain);
-
-      // Nhánh Bass: Source -> bassFilter -> bassGain -> vocalCutGain (chỉ phát khi bật beat mode)
-      this.sourceNode.connect(this.bassFilter);
-      this.bassFilter.connect(this.bassGain);
-      this.bassGain.connect(this.vocalCutGain);
-
-      // Master output ra loa
-      this.masterGain.connect(this.audioCtx.destination);
-
-      return true;
-    } catch (err) {
-      console.warn('[KaraokeAudioEngine] Web Audio setup warning:', err);
-      return false;
+  public getReferenceAnalyser(): AnalyserNode | null {
+    const el = document.getElementById(AUDIO_ID) as HTMLMediaElement | null;
+    const nodes = getElementAudioNodes(el);
+    if (!el || !nodes) return null;
+    let tap = this.taps.get(el);
+    if (!tap) {
+      const highpass = nodes.ctx.createBiquadFilter();
+      highpass.type = 'highpass';
+      highpass.frequency.value = 120;
+      const lowpass = nodes.ctx.createBiquadFilter();
+      lowpass.type = 'lowpass';
+      lowpass.frequency.value = 1000;
+      const analyser = nodes.ctx.createAnalyser();
+      analyser.fftSize = 2048; // downmixes L+R to mono: the centred lead vocal is strongest there
+      highpass.connect(lowpass).connect(analyser);
+      tap = { input: highpass, analyser };
+      this.taps.set(el, tap);
+      nodes.source.connect(tap.input);
     }
+    return tap.analyser;
+  }
+
+  /** source.disconnect() drops every branch; put the reference tap back after re-routing. */
+  private reconnectTap(el: HTMLMediaElement, source: AudioNode) {
+    const tap = this.taps.get(el);
+    if (tap) source.connect(tap.input);
+  }
+
+  private buildChain(ctx: AudioContext, target: AudioNode): CutChain {
+    const splitter = ctx.createChannelSplitter(2);
+    const inverter = ctx.createGain();
+    inverter.gain.value = -1;
+    const sideSum = ctx.createGain(); // L + (−R) = L − R, mono
+    splitter.connect(sideSum, 0);
+    splitter.connect(inverter, 1);
+    inverter.connect(sideSum);
+
+    // Residual vocal energy (reverb, slight stereo spread) sits around 1–3 kHz: dip it further.
+    const vocalDip = ctx.createBiquadFilter();
+    vocalDip.type = 'peaking';
+    vocalDip.frequency.value = 1500;
+    vocalDip.Q.value = 0.7;
+    vocalDip.gain.value = -9;
+    sideSum.connect(vocalDip);
+
+    const bass = ctx.createBiquadFilter();
+    bass.type = 'lowpass';
+    bass.frequency.value = 220;
+    bass.Q.value = 0.7;
+    const bassGain = ctx.createGain();
+    bassGain.gain.value = 0.9;
+    bass.connect(bassGain);
+
+    // The side signal is quieter than the full mix; lift it back to a comparable loudness.
+    const output = ctx.createGain();
+    output.gain.value = 1.6;
+    vocalDip.connect(output);
+    bassGain.connect(output);
+    output.connect(target);
+    return { inputs: [splitter, bass], output };
   }
 
   /**
-   * Bật / Tắt chế độ "Chỉ cần Beat" (Tách giọng ca sĩ)
+   * Turn beat-only mode on or off for the element playing now.
+   * Returns false when the song cannot be processed (YouTube, a host without CORS, iOS): it keeps its vocals.
    */
-  public setBeatOnly(enabled: boolean): void {
+  public setBeatOnly(enabled: boolean): boolean {
     this.isBeatModeActive = enabled;
-    if (!this.audioCtx || !this.dryGain || !this.vocalCutGain) {
-      // Nếu chưa khởi tạo thì thử tìm audio element
-      const el = document.getElementById('musicwave-html5-audio') as HTMLMediaElement | null;
-      if (el) this.init(el);
+    return this.apply();
+  }
+
+  /** Re-applies the current mode, e.g. after the player switched to a new <audio> element for the next song. */
+  public apply(): boolean {
+    const el = document.getElementById(AUDIO_ID) as HTMLMediaElement | null;
+    if (!this.isBeatModeActive) {
+      this.restore(this.routedElement);
+      if (el !== this.routedElement) this.restore(el);
+      this.routedElement = null;
+      return true;
     }
-
-    if (!this.audioCtx || !this.dryGain || !this.vocalCutGain) return;
-
-    if (this.audioCtx.state === 'suspended') {
-      this.audioCtx.resume().catch(() => {});
+    if (this.routedElement && this.routedElement !== el) this.restore(this.routedElement);
+    const nodes = getElementAudioNodes(el);
+    if (!el || !nodes) return false;
+    let chain = this.chains.get(el);
+    if (!chain) {
+      chain = this.buildChain(nodes.ctx, nodes.gain);
+      this.chains.set(el, chain);
     }
+    nodes.source.disconnect();
+    chain.inputs.forEach((input) => nodes.source.connect(input));
+    this.reconnectTap(el, nodes.source);
+    this.routedElement = el;
+    return true;
+  }
 
-    const now = this.audioCtx.currentTime;
-    const fadeDuration = 0.15; // Chuyển đổi êm ái trong 150ms
-
-    if (enabled) {
-      // Giảm âm thanh gốc xuống 0, tăng nhánh Beat / Tách lời lên 1.4 (bù âm lượng)
-      this.dryGain.gain.setTargetAtTime(0.0, now, fadeDuration);
-      this.vocalCutGain.gain.setTargetAtTime(1.4, now, fadeDuration);
-    } else {
-      // Trả lại âm thanh gốc đầy đủ
-      this.dryGain.gain.setTargetAtTime(1.0, now, fadeDuration);
-      this.vocalCutGain.gain.setTargetAtTime(0.0, now, fadeDuration);
-    }
+  private restore(el: HTMLMediaElement | null) {
+    if (!el || !this.chains.has(el)) return;
+    const nodes = getElementAudioNodes(el);
+    if (!nodes) return;
+    nodes.source.disconnect();
+    nodes.source.connect(nodes.gain);
+    this.reconnectTap(el, nodes.source);
   }
 
   public isBeatOnly(): boolean {
@@ -173,4 +143,3 @@ class KaraokeAudioEngine {
 }
 
 export const karaokeAudioEngine = new KaraokeAudioEngine();
-

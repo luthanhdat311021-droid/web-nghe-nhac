@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Play, Shuffle, ListMusic, Edit, Trash2, ArrowLeft } from 'lucide-react';
+import { Play, Shuffle, ListMusic, Edit, Trash2, ArrowLeft, Plus, Search, Loader2, Check } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import { Playlist } from '../types/index.js';
+import { Playlist, Song } from '../types/index.js';
 import { playlistService } from '../services/playlist.service.js';
+import { searchService } from '../services/search.service.js';
+import { useAuthStore } from '../store/authStore.js';
 import { usePlayerStore } from '../store/playerStore.js';
 import { useFavoriteStore } from '../store/favoriteStore.js';
 import { SongRow } from '../components/cards/SongRow.js';
@@ -47,6 +49,52 @@ export const PlaylistDetail: React.FC = () => {
       setEditPublic(playlist.isPublic !== false);
     }
   }, [playlist?.id]);
+
+  // Add-songs dialog (owner only)
+  // The detail API sends isOwner and user{id}, but no userId. The server checks ownership on add anyway.
+  const currentUserId = useAuthStore((s) => s.user?.id);
+  const isOwner = Boolean(
+    playlist && (playlist.isOwner || (currentUserId && (playlist.user?.id ?? playlist.userId) === currentUserId))
+  );
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addQuery, setAddQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [addingId, setAddingId] = useState<string | null>(null);
+  const [addError, setAddError] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(addQuery), 300);
+    return () => clearTimeout(t);
+  }, [addQuery]);
+  const { data: results, isFetching: searching } = useQuery<Song[]>({
+    queryKey: ['playlist-add-search', debouncedQuery.trim()],
+    queryFn: async ({ signal }) => (await searchService.search(debouncedQuery.trim(), 'songs', undefined, signal)).songs || [],
+    enabled: showAddModal && debouncedQuery.trim().length >= 2,
+    staleTime: 1000 * 60,
+  });
+  const inPlaylist = new Set((playlist?.songs || []).map((s) => s.id));
+
+  const handleAddSong = async (song: Song) => {
+    if (!id) return;
+    setAddingId(song.id);
+    setAddError('');
+    try {
+      await playlistService.addSong(id, song.id);
+      // Show it in the list right away; addSong also refreshes the playlist from the server.
+      queryClient.setQueryData(QUERY_KEYS.playlistDetail(id), (old: Playlist | null | undefined) =>
+        old && !old.songs?.some((s) => s.id === song.id) ? { ...old, songs: [...(old.songs || []), song] } : old
+      );
+    } catch (err: any) {
+      setAddError(err.response?.data?.message || 'Không thêm được bài hát. Thử lại sau.');
+    } finally {
+      setAddingId(null);
+    }
+  };
+
+  const closeAddModal = () => {
+    setShowAddModal(false);
+    setAddQuery('');
+    setAddError('');
+  };
 
   const handlePlayAll = () => {
     if (playlist?.songs && playlist.songs.length > 0) {
@@ -170,6 +218,16 @@ export const PlaylistDetail: React.FC = () => {
               <span>Trộn bài</span>
             </button>
 
+            {isOwner && (
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="px-4 py-2 rounded-full bg-white/5 hover:bg-white/10 text-white text-xs font-semibold border border-white/10 transition-colors active:scale-95 flex items-center gap-1.5"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Thêm bài hát</span>
+              </button>
+            )}
+
             <button
               onClick={() => setShowEditModal(true)}
               aria-label="Sửa playlist"
@@ -207,12 +265,89 @@ export const PlaylistDetail: React.FC = () => {
             ))}
           </div>
         ) : (
-          <EmptyState
-            title="Danh sách phát còn trống"
-            description="Hãy thêm các bài hát yêu thích vào danh sách phát này để thưởng thức."
-          />
+          <div className="space-y-3">
+            <EmptyState
+              title="Danh sách phát còn trống"
+              description="Hãy thêm các bài hát yêu thích vào danh sách phát này để thưởng thức."
+            />
+            {isOwner && (
+              <div className="flex justify-center">
+                <button
+                  onClick={() => setShowAddModal(true)}
+                  className="px-5 py-2 rounded-full bg-white text-black font-bold text-xs flex items-center gap-1.5 hover:scale-105 active:scale-95 transition-transform"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Tìm và thêm bài hát</span>
+                </button>
+              </div>
+            )}
+          </div>
         )}
       </section>
+
+      {/* Add songs: search the catalog and add without leaving the playlist */}
+      <Modal isOpen={showAddModal} onClose={closeAddModal} title="Thêm bài hát vào playlist">
+        <div className="space-y-3">
+          <div className="relative">
+            <Search className="w-4 h-4 text-text-muted absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              autoFocus
+              value={addQuery}
+              onChange={(e) => setAddQuery(e.target.value)}
+              placeholder="Tìm tên bài hát, ca sĩ…"
+              className="w-full rounded-xl bg-background-surface border border-white/10 pl-9 pr-3 py-2.5 text-sm text-text-primary outline-none focus:border-primary-500"
+            />
+          </div>
+          {addError && <p className="text-xs text-red-400">{addError}</p>}
+          <div className="max-h-[50vh] overflow-y-auto -mx-1 px-1 space-y-1">
+            {debouncedQuery.trim().length < 2 ? (
+              <p className="py-8 text-center text-xs text-text-muted">Gõ ít nhất 2 ký tự để tìm bài hát.</p>
+            ) : searching ? (
+              <div className="py-8 flex justify-center">
+                <Loader2 className="w-5 h-5 animate-spin text-text-muted" />
+              </div>
+            ) : !results?.length ? (
+              <p className="py-8 text-center text-xs text-text-muted">Không tìm thấy bài hát phù hợp.</p>
+            ) : (
+              results.map((song) => {
+                const added = inPlaylist.has(song.id);
+                const busy = addingId === song.id;
+                return (
+                  <div key={song.id} className="flex items-center gap-3 rounded-xl px-2 py-2 hover:bg-white/5">
+                    <img
+                      src={song.coverUrl}
+                      alt=""
+                      className="w-10 h-10 rounded-lg object-cover bg-white/5 flex-shrink-0"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-white truncate">{song.title}</p>
+                      <p className="text-xs text-text-muted truncate">{song.artist?.name}</p>
+                    </div>
+                    <button
+                      onClick={() => handleAddSong(song)}
+                      disabled={added || busy}
+                      className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1 transition-colors ${
+                        added
+                          ? 'bg-emerald-500/15 text-emerald-300'
+                          : 'bg-white/10 hover:bg-white/20 text-white'
+                      }`}
+                    >
+                      {busy ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : added ? (
+                        <Check className="w-3.5 h-3.5" />
+                      ) : (
+                        <Plus className="w-3.5 h-3.5" />
+                      )}
+                      {added ? 'Đã thêm' : 'Thêm'}
+                    </button>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      </Modal>
 
       {/* Edit Modal */}
       <Modal

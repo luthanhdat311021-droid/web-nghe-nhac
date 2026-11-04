@@ -6,8 +6,46 @@ import {
   LineMelody,
   pitchDistanceInSemitones,
   TargetMelodyNote,
-} from '../utils/pitchDetector.js';
-import { karaokeAudioEngine } from '../utils/vocalRemover.js';
+} from '../utils/pitchDetector.js';import { karaokeAudioEngine } from '../utils/vocalRemover.js';
+
+// Shown instead of silently playing the original mix with vocals.
+const BEAT_UNSUPPORTED =
+  'Bài này không tách được giọng ca sĩ: nhạc phát từ YouTube hoặc máy chủ không cho phép xử lý âm thanh (iPhone cũng chưa hỗ trợ). Bạn vẫn hát và chấm điểm bình thường.';
+
+// Per-line tallies, in analysis frames (~30 per second).
+interface LineStats {
+  frames: number;      // frames the line was on screen while playing
+  voiced: number;      // ...in which the user was singing
+  compared: number;    // ...in which both the user and the original singer had a clear pitch
+  hits: number;        // compared frames within 1 semitone of the singer (any octave)
+  perfects: number;    // compared frames within half a semitone
+}
+const emptyStats = (): LineStats => ({ frames: 0, voiced: 0, compared: 0, hits: 0, perfects: 0 });
+
+// Below this the singer's pitch is unreadable in the mix (instruments, chords, silence). Measured on a real
+// song: sung verses read ~0.62 median, instrumental intros ~0.49.
+const SINGER_CLARITY = 0.6;
+// The tap follows the player's volume slider; clarity does not, so only near-silence is rejected by level.
+const SINGER_MIN_RMS = 0.002;
+// Lines shorter than this (in frames) are skipped rather than judged on a handful of samples.
+const MIN_LINE_FRAMES = 15;
+
+/** PERFECT / GOOD / MISS for a finished line: pitch against the singer when it was readable, else timing only. */
+export const judgeLine = (s: LineStats): KaraokeVerdictType | null => {
+  if (s.frames < MIN_LINE_FRAMES) return null;
+  const coverage = s.voiced / s.frames;
+  if (s.compared >= 8) {
+    const accuracy = s.hits / s.compared;
+    const precise = s.perfects / s.compared;
+    if (coverage >= 0.3 && (precise >= 0.45 || accuracy >= 0.65)) return 'PERFECT';
+    if (coverage >= 0.2 && accuracy >= 0.3) return 'GOOD';
+    return 'MISS';
+  }
+  // Singer not readable (YouTube source, dense mix): reward singing through the line on time.
+  if (coverage >= 0.6) return 'PERFECT';
+  if (coverage >= 0.3) return 'GOOD';
+  return 'MISS';
+};
 
 export type KaraokeVerdictType = 'PERFECT' | 'GOOD' | 'MISS';
 
@@ -97,19 +135,21 @@ export const useKaraokeScorer = ({
 
   // Thống kê từng dòng đang hát
   const currentLineIndexRef = useRef<number>(-1);
-  const lineStatsRef = useRef<{
-    voicedFrames: number;
-    hitFrames: number;
-    perfectFrames: number;
-  }>({ voicedFrames: 0, hitFrames: 0, perfectFrames: 0 });
+  const lineStatsRef = useRef<LineStats>(emptyStats());
+  // The analysis loop runs per animation frame; it reads the latest playback time from a ref instead of
+  // restarting every time the player reports a new currentTime (~4 times a second).
+  const currentTimeRef = useRef(currentTime);
+  currentTimeRef.current = currentTime;
 
   // Bật / tắt chế độ Chỉ cần Beat (Vocal Remover)
   const toggleBeatMode = useCallback((forceState?: boolean) => {
-    setIsBeatOnly((prev) => {
-      const next = typeof forceState === 'boolean' ? forceState : !prev;
-      karaokeAudioEngine.setBeatOnly(next);
-      return next;
-    });
+    const next = typeof forceState === 'boolean' ? forceState : !karaokeAudioEngine.isBeatOnly();
+    const ok = karaokeAudioEngine.setBeatOnly(next);
+    setIsBeatOnly(next && ok);
+    if (!ok) {
+      karaokeAudioEngine.setBeatOnly(false);
+      setMicError(BEAT_UNSUPPORTED);
+    }
   }, []);
 
   // Bật / tắt chế độ lời chạy theo giọng hát
@@ -150,8 +190,12 @@ export const useKaraokeScorer = ({
       setIsMicOn(true);
 
       // Khi bấm bắt đầu hát Karaoke -> Tự động tách lời ca sĩ (chỉ giữ Beat) & bật bám lời theo giọng
-      karaokeAudioEngine.setBeatOnly(true);
-      setIsBeatOnly(true);
+      const beatOk = karaokeAudioEngine.setBeatOnly(true);
+      setIsBeatOnly(beatOk);
+      if (!beatOk) {
+        karaokeAudioEngine.setBeatOnly(false);
+        setMicError(BEAT_UNSUPPORTED);
+      }
       setIsVoicePacing(true);
     } catch (err: any) {
       console.error('Lỗi truy cập micro:', err);
@@ -199,30 +243,19 @@ export const useKaraokeScorer = ({
     setLastVerdict(null);
     setIsFinished(false);
     currentLineIndexRef.current = -1;
-    lineStatsRef.current = { voicedFrames: 0, hitFrames: 0, perfectFrames: 0 };
+    lineStatsRef.current = emptyStats();
   }, []);
 
   // Đánh giá và chấm điểm cho dòng vừa hoàn thành
   const evaluateLine = useCallback(
     (lineIdx: number) => {
       if (lineIdx < 0 || lineIdx >= lineMelodies.length) return;
-      const stats = lineStatsRef.current;
-      const { voicedFrames, hitFrames, perfectFrames } = stats;
-
-      let verdictType: KaraokeVerdictType = 'MISS';
+      const judged = judgeLine(lineStatsRef.current);
+      lineStatsRef.current = emptyStats();
+      // Too short to judge (or skipped by seeking): no verdict, combo untouched.
+      if (!judged) return;
+      const verdictType: KaraokeVerdictType = judged;
       let points = 0;
-
-      // Cần có ít nhất một số frame có giọng hát
-      if (voicedFrames >= 8) {
-        const hitRatio = hitFrames / voicedFrames;
-        const perfectRatio = perfectFrames / voicedFrames;
-
-        if (perfectRatio >= 0.5 || hitRatio >= 0.65) {
-          verdictType = 'PERFECT';
-        } else if (hitRatio >= 0.3) {
-          verdictType = 'GOOD';
-        }
-      }
 
       setCombo((prevCombo) => {
         let nextCombo = 0;
@@ -256,63 +289,86 @@ export const useKaraokeScorer = ({
 
         return nextCombo;
       });
-
-      // Reset thống kê cho dòng tiếp theo
-      lineStatsRef.current = { voicedFrames: 0, hitFrames: 0, perfectFrames: 0 };
     },
     [lineMelodies, onVerdict]
   );
 
-  // Vòng lặp phân tích Pitch qua Web Audio API (60fps)
+  const evaluateLineRef = useRef(evaluateLine);
+  evaluateLineRef.current = evaluateLine;
+  const isPlayingRef = useRef(isPlaying);
+  isPlayingRef.current = isPlaying;
+
+  // Vòng lặp phân tích: giọng người hát (micro) so với giọng ca sĩ gốc đọc trực tiếp từ bài hát.
   useEffect(() => {
     if (!isMicOn || !analyserRef.current || !audioContextRef.current) return;
 
     const analyser = analyserRef.current;
     const sampleRate = audioContextRef.current.sampleRate;
     const buffer = new Float32Array(analyser.fftSize);
+    let reference: AnalyserNode | null = null;
+    let referenceBuffer: Float32Array<ArrayBuffer> | null = null;
+    let referenceCheckedAt = 0;
+    let frame = 0;
 
     const tick = () => {
-      if (analyser.getFloatTimeDomainData) {
-        analyser.getFloatTimeDomainData(buffer);
-      } else {
-        const byteBuffer = new Uint8Array(analyser.fftSize);
-        analyser.getByteTimeDomainData(byteBuffer);
-        for (let i = 0; i < byteBuffer.length; i++) {
-          buffer[i] = (byteBuffer[i] - 128) / 128;
-        }
-      }
+      animFrameRef.current = requestAnimationFrame(tick);
+      // Two autocorrelations per frame are heavy on phones; ~30 analyses per second is plenty for singing.
+      if (frame++ % 2) return;
+      const currentTime = currentTimeRef.current;
+
+      analyser.getFloatTimeDomainData(buffer);
       const pitch = detectPitchFromBuffer(buffer, sampleRate);
       setLivePitch(pitch);
 
-      // Tìm nốt mục tiêu tại thời điểm hiện tại
-      let target: TargetMelodyNote | null = null;
-      let activeLineIdx = -1;
+      // The playing <audio> element changes between songs; look the reference tap up again now and then.
+      const now = performance.now();
+      if (now - referenceCheckedAt > 1000) {
+        referenceCheckedAt = now;
+        reference = karaokeAudioEngine.getReferenceAnalyser();
+        if (reference && referenceBuffer?.length !== reference.fftSize) referenceBuffer = new Float32Array(reference.fftSize);
+      }
+      let singer: DetectedPitch | null = null;
+      if (reference && referenceBuffer && isPlayingRef.current) {
+        reference.getFloatTimeDomainData(referenceBuffer);
+        const p = detectPitchFromBuffer(referenceBuffer, reference.context.sampleRate, SINGER_MIN_RMS);
+        if (p && p.clarity >= SINGER_CLARITY) singer = p;
+      }
 
+      let activeLineIdx = -1;
+      let word: TargetMelodyNote | null = null;
       for (let i = 0; i < lineMelodies.length; i++) {
         const line = lineMelodies[i];
         if (currentTime >= line.startSec && currentTime < line.endSec) {
           activeLineIdx = i;
-          target =
-            line.notes.find(
-              (n) =>
-                currentTime >= n.startSec &&
-                currentTime < n.startSec + n.durationSec
-            ) || line.notes[0];
+          word = line.notes.find((n) => currentTime >= n.startSec && currentTime < n.startSec + n.durationSec) || line.notes[0];
           break;
         }
       }
 
+      // The target shown and judged is the singer's real note, labelled with the word being sung.
+      const target: TargetMelodyNote | null =
+        singer && activeLineIdx !== -1
+          ? {
+              id: word?.id || 'singer',
+              word: word?.word || '',
+              startSec: currentTime,
+              durationSec: 0,
+              midi: singer.midi,
+              noteName: singer.noteName,
+              freq: singer.freq,
+            }
+          : null;
       setCurrentNote(target);
 
-      const now = performance.now();
-      const dt = lastFrameTimeRef.current > 0 ? Math.min(0.05, (now - lastFrameTimeRef.current) / 1000) : 1 / 60;
+      const dt = lastFrameTimeRef.current > 0 ? Math.min(0.1, (now - lastFrameTimeRef.current) / 1000) : 1 / 30;
       lastFrameTimeRef.current = now;
 
-      // Nếu chuyển từ dòng này sang dòng khác -> chấm điểm dòng trước & reset tiến trình chữ
+      // Leaving a line (to the next one or to an instrumental gap) scores it.
       if (currentLineIndexRef.current !== activeLineIdx) {
-        if (currentLineIndexRef.current !== -1 && activeLineIdx !== -1) {
-          evaluateLine(currentLineIndexRef.current);
+        if (currentLineIndexRef.current !== -1) {
+          evaluateLineRef.current(currentLineIndexRef.current);
         }
+        lineStatsRef.current = emptyStats();
         voiceProgressRef.current = 0;
         setVoiceProgress(0);
         setSungWordIndex(-1);
@@ -320,22 +376,24 @@ export const useKaraokeScorer = ({
       }
 
       // Nếu người dùng đang hát -> thu thập frame thống kê & đẩy chữ chạy theo giọng hát
-      if (activeLineIdx !== -1) {
+      if (activeLineIdx !== -1 && isPlayingRef.current) {
         const activeLine = lineMelodies[activeLineIdx];
         const totalWords = Math.max(1, activeLine.notes.length);
+        const stats = lineStatsRef.current;
+        stats.frames++;
 
         if (pitch?.isVoiced) {
           let speedBoost = 1.0;
+          stats.voiced++;
           if (target) {
-            lineStatsRef.current.voicedFrames++;
+            stats.compared++;
             const diff = pitchDistanceInSemitones(pitch.midi, target.midi);
-
-            if (diff <= 0.6) {
-              lineStatsRef.current.perfectFrames++;
-              lineStatsRef.current.hitFrames++;
+            if (diff <= 0.5) {
+              stats.perfects++;
+              stats.hits++;
               speedBoost = 1.15;
-            } else if (diff <= 1.4) {
-              lineStatsRef.current.hitFrames++;
+            } else if (diff <= 1) {
+              stats.hits++;
               speedBoost = 1.08;
             }
           }
@@ -350,8 +408,6 @@ export const useKaraokeScorer = ({
         }
         // Khi người dùng ngưng hát (!pitch?.isVoiced), voiceProgressRef giữ nguyên vị trí hiện tại!
       }
-
-      animFrameRef.current = requestAnimationFrame(tick);
     };
 
     lastFrameTimeRef.current = performance.now();
@@ -362,7 +418,7 @@ export const useKaraokeScorer = ({
         cancelAnimationFrame(animFrameRef.current);
       }
     };
-  }, [isMicOn, currentTime, lineMelodies, evaluateLine]);
+  }, [isMicOn, lineMelodies]);
 
   // Khi bài hát gần kết thúc (hoặc kết thúc), tổng kết kết quả
   const finishSession = useCallback(() => {

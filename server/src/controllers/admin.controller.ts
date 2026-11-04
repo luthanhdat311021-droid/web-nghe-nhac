@@ -559,7 +559,8 @@ export const updateSong = async (req: AuthenticatedRequest, res: Response) => {
           isSynced: !!validated.syncedLyrics,
         },
         update: {
-          ...(validated.lyrics !== undefined ? { plainLyrics: validated.lyrics } : {}),
+          // New wording makes a stored translation wrong; a timing-only change (offset save) keeps it.
+          ...(validated.lyrics !== undefined ? { plainLyrics: validated.lyrics, translatedLyrics: null } : {}),
           ...(validated.syncedLyrics !== undefined ? { syncedLyrics: validated.syncedLyrics, isSynced: !!validated.syncedLyrics } : {}),
         },
       });

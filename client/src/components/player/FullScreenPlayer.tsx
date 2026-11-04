@@ -247,10 +247,10 @@ export const FullScreenPlayer: React.FC = () => {
                 onClick={() => seekRelative(-10)}
                 aria-label="Tua lùi 10s"
                 title="Tua lùi 10s"
-                className="p-2 rounded-full text-white/80 hover:text-white transition-all active:scale-90 touch-target relative"
+                className="p-2 rounded-full text-white/80 hover:text-white transition-all active:scale-90 touch-target relative flex items-center justify-center"
               >
                 <RotateCcw className="w-5 h-5" />
-                <span className="absolute inset-0 flex items-center justify-center text-[8px] font-bold font-mono text-white pointer-events-none mt-0.5">
+                <span className="absolute inset-0 flex items-center justify-center text-[8px] font-bold font-mono text-white pointer-events-none leading-none pt-px">
                   10
                 </span>
               </button>
@@ -291,10 +291,10 @@ export const FullScreenPlayer: React.FC = () => {
                 onClick={() => seekRelative(10)}
                 aria-label="Tua tới 10s"
                 title="Tua nhanh 10s"
-                className="p-2 rounded-full text-white/80 hover:text-white transition-all active:scale-90 touch-target relative"
+                className="p-2 rounded-full text-white/80 hover:text-white transition-all active:scale-90 touch-target relative flex items-center justify-center"
               >
                 <RotateCw className="w-5 h-5" />
-                <span className="absolute inset-0 flex items-center justify-center text-[8px] font-bold font-mono text-white pointer-events-none mt-0.5">
+                <span className="absolute inset-0 flex items-center justify-center text-[8px] font-bold font-mono text-white pointer-events-none leading-none pt-px">
                   10
                 </span>
               </button>
@@ -317,7 +317,7 @@ export const FullScreenPlayer: React.FC = () => {
             {/* Playback Speed Pill Selector Bar */}
             <div className="flex items-center justify-between bg-white/[0.04] p-1 rounded-xl border border-white/[0.06]">
               <div className="flex items-center gap-1.5 px-2 text-text-muted">
-                <Gauge className="w-3.5 h-3.5 text-primary-400" />
+                <Gauge className="w-3.5 h-3.5" />
                 <span className="text-[11px] font-medium">Tốc độ:</span>
               </div>
               <div className="flex items-center gap-1 flex-1 justify-end">
@@ -329,7 +329,7 @@ export const FullScreenPlayer: React.FC = () => {
                       onClick={() => setPlaybackRate(rate)}
                       className={`px-2 py-1 rounded-lg text-[11px] font-mono font-bold transition-all active:scale-90 ${
                         isActive
-                          ? 'bg-primary-500 text-white shadow-sm shadow-primary-500/50'
+                          ? 'bg-white text-black'
                           : 'text-text-muted hover:text-white hover:bg-white/10'
                       }`}
                     >
@@ -378,7 +378,7 @@ export const FullScreenPlayer: React.FC = () => {
                   aria-pressed={showVisualizer}
                   title="Hiệu ứng 3D"
                   className={`p-2 rounded-lg border border-white/[0.08] transition-colors active:scale-95 ${
-                    showVisualizer ? 'text-fuchsia-300 bg-fuchsia-400/15' : 'text-text-secondary bg-white/[0.04] hover:text-white'
+                    showVisualizer ? 'text-white bg-white/15 border-white/20' : 'text-text-secondary bg-white/[0.04] hover:text-white'
                   }`}
                 >
                   <Sparkles className="w-3.5 h-3.5" />
@@ -388,7 +388,7 @@ export const FullScreenPlayer: React.FC = () => {
                   onClick={openFx}
                   aria-label="Âm thanh Pro"
                   className={`p-2 rounded-lg border border-white/[0.08] transition-colors active:scale-95 ${
-                    fxEnabled ? 'text-amber-300 bg-amber-300/10' : 'text-text-secondary bg-white/[0.04] hover:text-white'
+                    fxEnabled ? 'text-white bg-white/15 border-white/20' : 'text-text-secondary bg-white/[0.04] hover:text-white'
                   }`}
                 >
                   <SlidersHorizontal className="w-3.5 h-3.5" />

@@ -290,10 +290,10 @@ export const BottomPlayer: React.FC = () => {
                 onClick={() => seekRelative(-10)}
                 aria-label="Tua lùi 10 giây"
                 title="Tua lùi 10s"
-                className="p-1.5 rounded-full text-text-muted hover:text-white transition-colors active:scale-95 relative"
+                className="p-1.5 rounded-full text-text-muted hover:text-white transition-colors active:scale-95 relative flex items-center justify-center"
               >
                 <RotateCcw className="w-4 h-4" />
-                <span className="absolute inset-0 flex items-center justify-center text-[7px] font-bold font-mono text-white pointer-events-none mt-0.5">
+                <span className="absolute inset-0 flex items-center justify-center text-[7px] font-bold font-mono text-white pointer-events-none leading-none pt-px">
                   10
                 </span>
               </button>
@@ -333,10 +333,10 @@ export const BottomPlayer: React.FC = () => {
                 onClick={() => seekRelative(10)}
                 aria-label="Tua tới 10 giây"
                 title="Tua nhanh 10s"
-                className="p-1.5 rounded-full text-text-muted hover:text-white transition-colors active:scale-95 relative"
+                className="p-1.5 rounded-full text-text-muted hover:text-white transition-colors active:scale-95 relative flex items-center justify-center"
               >
                 <RotateCw className="w-4 h-4" />
-                <span className="absolute inset-0 flex items-center justify-center text-[7px] font-bold font-mono text-white pointer-events-none mt-0.5">
+                <span className="absolute inset-0 flex items-center justify-center text-[7px] font-bold font-mono text-white pointer-events-none leading-none pt-px">
                   10
                 </span>
               </button>

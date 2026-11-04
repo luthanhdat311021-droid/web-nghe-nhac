@@ -94,7 +94,8 @@ export const ensureAudioContext = () => {
     analyser.fftSize = 256;
     analyser.smoothingTimeConstant = 0.8;
     filters[filters.length - 1].connect(analyser).connect(ctx.destination);
-    applyGains(useAudioFxStore.getState().gains);
+    // Karaoke may route audio through this chain without the EQ being on: it must then be transparent.
+    applyGains(fxActive() ? useAudioFxStore.getState().gains : EQ_PRESETS.flat.gains);
   }
   if (ctx.state === 'suspended') ctx.resume().catch(() => {});
   return ctx;
@@ -108,17 +109,44 @@ export const fxActive = () => useAudioFxStore.getState().enabled && isProUser();
  */
 export const attachAudioElement = (el: HTMLMediaElement | null) => {
   if (!el || IS_IOS || nodes.has(el) || !fxActive() || !ctx || ctx.state !== 'running') return;
+  routeElement(el);
+};
+
+/** Whether this element's current source can be read by Web Audio without being silenced. */
+const elementProcessable = (el: HTMLMediaElement) => {
   const src = el.currentSrc || el.src;
   // A cross-origin source loaded without the crossorigin attribute would be silenced, even from a CORS host.
-  if (src && (!canProcessSource(src) || (!isSameOrigin(src) && el.crossOrigin !== 'anonymous'))) return;
+  return !!src && canProcessSource(src) && (isSameOrigin(src) || el.crossOrigin === 'anonymous');
+};
+
+/**
+ * The single Web Audio entry point for an element: source -> gain -> EQ chain -> output. A media element
+ * accepts only one MediaElementSource ever, so the EQ and the karaoke vocal remover must share this one.
+ */
+const routeElement = (el: HTMLMediaElement) => {
+  const existing = nodes.get(el);
+  if (existing) return existing;
+  if (!ctx || !elementProcessable(el)) return null;
   try {
     const source = ctx.createMediaElementSource(el);
     const gain = ctx.createGain();
     source.connect(gain).connect(filters[0]);
-    nodes.set(el, { source, gain });
+    const node = { source, gain };
+    nodes.set(el, node);
+    return node;
   } catch (e) {
     console.warn('[MusicWave FX] Cannot attach audio element:', e);
+    return null;
   }
+};
+
+/** For the karaoke vocal remover: the element's shared source and gain, or null when it cannot be processed. */
+export const getElementAudioNodes = (el: HTMLMediaElement | null) => {
+  if (!el || IS_IOS) return null;
+  const audioCtx = ensureAudioContext();
+  if (!audioCtx) return null;
+  const node = routeElement(el);
+  return node ? { ctx: audioCtx, ...node } : null;
 };
 
 export const isAttached = (el: HTMLMediaElement | null) => !!el && nodes.has(el);

@@ -8,6 +8,7 @@ import {
   activeCrossfadeSeconds, armFadeIn, attachAudioElement, canProcessSource, ensureAudioContext, fadeOutElement,
   fxActive, isAttached, isFadeInArmed, runArmedFadeIn,
 } from './audioFxStore.js';
+import { karaokeAudioEngine } from '../utils/vocalRemover.js';
 
 type RepeatMode = 'off' | 'all' | 'one';
 
@@ -399,6 +400,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         ensureAudioContext();
         attachAudioElement(audio);
       }
+      // Karaoke beat-only mode follows the song onto whichever element now plays it.
+      if (karaokeAudioEngine.isBeatOnly()) karaokeAudioEngine.apply();
       const targetVolume = state.isMuted ? 0 : state.volume;
       audio.currentTime = 0;
       audio.volume = isFadeInArmed() ? 0 : targetVolume;

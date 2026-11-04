@@ -12,6 +12,7 @@ export interface DetectedPitch {
   cents: number;         // Độ lệch cents (-50 đến +50)
   volume: number;        // Âm lượng RMS (0 đến 1)
   isVoiced: boolean;     // Có giọng người hát không (vượt ngưỡng âm lượng)
+  clarity: number;       // 0–1: độ "rõ nốt" (đỉnh tự tương quan / năng lượng); nhạc nền lẫn lộn cho giá trị thấp
 }
 
 export interface TargetMelodyNote {
@@ -63,13 +64,14 @@ export const midiToNoteName = (midi: number): string => {
  * Giúp ca sĩ giọng Nam hát thấp hơn ca sĩ giọng Nữ 1 quãng 8 vẫn được tính điểm trúng nốt!
  */
 export const pitchDistanceInSemitones = (userMidi: number, targetMidi: number): number => {
-  const diff = userMidi - targetMidi;
-  // Xét độ lệch ở quãng gốc, -1 quãng 8 (-12), và +1 quãng 8 (+12)
-  const d0 = Math.abs(diff);
-  const dMinus = Math.abs(diff - 12);
-  const dPlus = Math.abs(diff + 12);
-  return Math.min(d0, dMinus, dPlus);
+  // Bỏ qua mọi chênh lệch quãng 8 (nam/nữ, hát thấp/cao vài quãng): chỉ so cùng tên nốt.
+  const d = (((userMidi - targetMidi) % 12) + 12) % 12;
+  return Math.min(d, 12 - d);
 };
+
+/** Dời nốt người hát lên/xuống từng quãng 8 cho gần nốt ca sĩ nhất, để vẽ hai nốt cạnh nhau. */
+export const foldToOctaveOf = (midi: number, targetMidi: number): number =>
+  midi + 12 * Math.round((targetMidi - midi) / 12);
 
 /**
  * Thuật toán Autocorrelation phát hiện tần số cơ bản (F0) từ buffer âm thanh của micro
@@ -109,10 +111,12 @@ export const detectPitchFromBuffer = (
     }
   }
   const trimmed = buffer.subarray(r1, r2);
-  const c = new Float32Array(trimmed.length);
+  // Chỉ cần các độ trễ tới chu kỳ của 80 Hz: tính hết cả buffer tốn gấp ~3 lần mà không dùng tới.
+  const lagLimit = Math.min(trimmed.length, Math.floor(sampleRate / 80) + 2);
+  const c = new Float32Array(lagLimit);
 
   // 3. Tự tương quan (Autocorrelation)
-  for (let i = 0; i < trimmed.length; i++) {
+  for (let i = 0; i < lagLimit; i++) {
     let sum = 0;
     for (let j = 0; j < trimmed.length - i; j++) {
       sum += trimmed[j] * trimmed[j + i];
@@ -173,6 +177,7 @@ export const detectPitchFromBuffer = (
     cents,
     volume: Math.min(1, rms * 8),
     isVoiced: true,
+    clarity: c[0] > 0 ? Math.max(0, Math.min(1, maxVal / c[0])) : 0,
   };
 };
 
