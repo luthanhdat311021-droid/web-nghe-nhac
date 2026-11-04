@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Music2, Play, Pause, Minus, Plus, Loader2, Search, Sparkles, Languages, Mic, Trophy, Flag } from 'lucide-react';
+import { X, Music2, Play, Pause, Minus, Plus, Loader2, Search, Sparkles, Languages, Mic, Trophy, Flag, PenLine } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { usePlayerStore, useCurrentSong, useIsPlaying } from '../../store/playerStore.js';
 import { useQuizMask, useJamStore } from '../../store/jamStore.js';
@@ -82,6 +82,85 @@ const KaraokeBody: React.FC = () => {
     } finally {
       setSearching(false);
     }
+  };
+
+  // Manual lyrics: the admin pastes the words, AI listens to this song's audio and times each line.
+  // The result plays as a live preview first; it is saved for everyone only on "Lưu".
+  const [manualOpen, setManualOpen] = useState(false);
+  const [manualText, setManualText] = useState('');
+  const [manualBusy, setManualBusy] = useState(false);
+  const [manualNote, setManualNote] = useState('');
+  const [manualPreview, setManualPreview] = useState<{ plainLyrics: string; syncedLyrics: string } | null>(null);
+  useEffect(() => {
+    setManualOpen(false);
+    setManualPreview(null);
+    setManualNote('');
+  }, [currentSong.id]);
+
+  const openManual = () => {
+    setManualText(lyrics?.plainLyrics || '');
+    setManualNote('');
+    setManualOpen(true);
+  };
+
+  const alignManualLyrics = async () => {
+    const text = manualText.split('\n').map((l) => l.trim()).filter(Boolean).join('\n');
+    if (text.split('\n').length < 2) {
+      setManualNote('Nhập ít nhất 2 dòng lời, mỗi câu một dòng.');
+      return;
+    }
+    setManualBusy(true);
+    setManualNote('');
+    try {
+      const form = new FormData();
+      const youtube = currentSong.sourceType === 'youtube' ? currentSong.youtubeUrl : null;
+      form.append(youtube ? 'youtubeUrl' : 'audioUrl', youtube || currentSong.audioUrl);
+      form.append('lyrics', text);
+      form.append('title', currentSong.title);
+      form.append('artist', currentSong.artist?.name || '');
+      const result = await adminService.aiTranscribeLyrics(form);
+      const preview = { plainLyrics: text, syncedLyrics: result.syncedLyrics };
+      setManualPreview(preview);
+      setFoundLyrics({
+        ...(lyrics as Lyrics),
+        songId: currentSong.id,
+        plainLyrics: preview.plainLyrics,
+        syncedLyrics: preview.syncedLyrics,
+        translatedLyrics: null,
+        isSynced: true,
+      });
+      setTranslatedCache(null);
+      setOffset(0);
+      setManualOpen(false);
+    } catch (err: any) {
+      setManualNote(err.response?.data?.message || 'AI chưa căn được thời gian. Thử lại sau ít phút.');
+    } finally {
+      setManualBusy(false);
+    }
+  };
+
+  const saveManualLyrics = async () => {
+    if (!manualPreview) return;
+    setManualBusy(true);
+    try {
+      const form = new FormData();
+      form.append('lyrics', manualPreview.plainLyrics);
+      form.append('syncedLyrics', manualPreview.syncedLyrics);
+      await adminService.updateSong(currentSong.id, form);
+      setManualPreview(null);
+      setManualNote('');
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.songDetail(currentSong.id) });
+    } catch (err: any) {
+      setManualNote(err.response?.data?.message || 'Không lưu được lời bài hát.');
+    } finally {
+      setManualBusy(false);
+    }
+  };
+
+  const discardManualPreview = () => {
+    setManualPreview(null);
+    setManualNote('');
+    setFoundLyrics(null);
   };
 
   const [offset, setOffset] = useState(0);
@@ -408,12 +487,118 @@ const KaraokeBody: React.FC = () => {
               <span className="text-[11px] text-red-300 truncate max-w-[200px]">{translationError}</span>
             )}
           </div>
-          <div className="hidden sm:flex items-center gap-1.5 text-[11px] text-white/60">
-            <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-            <span>Bấm ✨ để Gemini kể chuyện & giải thích câu hát</span>
+          <div className="flex items-center gap-2">
+            {isAdmin && (
+              <button
+                onClick={openManual}
+                className="px-3 py-1.5 rounded-full border border-white/15 text-xs font-semibold flex items-center gap-1.5 text-white/80 hover:bg-white/10 hover:text-white active:scale-95 transition-all"
+              >
+                <PenLine className="w-3.5 h-3.5" />
+                <span>Nhập lời tay</span>
+              </button>
+            )}
+            <div className="hidden lg:flex items-center gap-1.5 text-[11px] text-white/60">
+              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+              <span>Bấm ✨ để Gemini kể chuyện & giải thích câu hát</span>
+            </div>
           </div>
         </div>
       )}
+
+      {/* Live preview of manually entered lyrics timed by AI: plays like saved lyrics until saved or discarded. */}
+      {manualPreview && (
+        <div className="relative z-20 mx-auto max-w-3xl w-full px-6 pb-2 flex-shrink-0">
+          <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-amber-300/40 bg-amber-300/10 px-4 py-2.5 text-xs text-amber-100">
+            <Sparkles className="w-4 h-4 text-amber-300 flex-shrink-0" />
+            <span className="flex-1 min-w-[180px]">Đang xem thử lời AI vừa căn thời gian. Nghe thử rồi lưu cho mọi người.</span>
+            <button
+              onClick={discardManualPreview}
+              disabled={manualBusy}
+              className="rounded-full px-3 py-1 font-semibold text-white/80 hover:bg-white/10 disabled:opacity-50"
+            >
+              Huỷ
+            </button>
+            <button
+              onClick={saveManualLyrics}
+              disabled={manualBusy}
+              className="rounded-full bg-amber-300 px-3 py-1 font-bold text-black disabled:opacity-50 inline-flex items-center gap-1.5"
+            >
+              {manualBusy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              Lưu lời
+            </button>
+          </div>
+          {manualNote && <p className="mt-1 text-xs text-red-300">{manualNote}</p>}
+        </div>
+      )}
+
+      {/* Manual lyrics entry */}
+      <AnimatePresence>
+        {manualOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+            onClick={() => !manualBusy && setManualOpen(false)}
+          >
+            <motion.div
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 20, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-lg rounded-3xl border border-white/10 bg-[#16161d] p-5 shadow-2xl"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <PenLine className="w-4 h-4 text-amber-300" /> Nhập lời bài hát
+                  </h3>
+                  <p className="mt-1 text-xs text-white/60">
+                    Dán lời, mỗi câu một dòng. AI sẽ nghe bài “{currentSong.title}” và căn thời gian cho từng câu.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setManualOpen(false)}
+                  disabled={manualBusy}
+                  aria-label="Đóng"
+                  className="p-1.5 rounded-full text-white/60 hover:bg-white/10 hover:text-white disabled:opacity-50"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <textarea
+                value={manualText}
+                onChange={(e) => setManualText(e.target.value)}
+                disabled={manualBusy}
+                rows={12}
+                placeholder={'Câu hát thứ nhất\nCâu hát thứ hai\n…'}
+                className="mt-4 w-full resize-y rounded-2xl border border-white/10 bg-black/40 p-3 text-sm leading-relaxed text-white placeholder:text-white/30 focus:border-amber-300/60 focus:outline-none select-text"
+              />
+              <div className="mt-1 text-right text-[11px] text-white/40">
+                {manualText.split('\n').filter((l) => l.trim()).length} dòng
+              </div>
+              {manualNote && <p className="mt-2 text-xs text-red-300">{manualNote}</p>}
+              <div className="mt-4 flex items-center justify-end gap-2">
+                <button
+                  onClick={() => setManualOpen(false)}
+                  disabled={manualBusy}
+                  className="rounded-full px-4 py-2 text-xs font-semibold text-white/70 hover:bg-white/10 disabled:opacity-50"
+                >
+                  Huỷ
+                </button>
+                <button
+                  onClick={alignManualLyrics}
+                  disabled={manualBusy || !manualText.trim()}
+                  className="rounded-full bg-amber-300 px-4 py-2 text-xs font-bold text-black inline-flex items-center gap-2 disabled:opacity-50 active:scale-95 transition-transform"
+                >
+                  {manualBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                  {manualBusy ? 'AI đang nghe bài hát… (~30 giây)' : 'AI căn thời gian'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Karaoke Pitch Visualizer HUD */}
       {isKaraokeMode && lines.length > 0 && (
@@ -467,6 +652,13 @@ const KaraokeBody: React.FC = () => {
                   {searching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
                   {searching ? 'Đang tìm lời…' : 'Tìm lời tự động'}
                 </button>
+                <button
+                  onClick={openManual}
+                  className="ml-2 inline-flex items-center gap-2 rounded-full border border-white/20 text-white px-4 py-2 text-xs font-bold hover:bg-white/10 active:scale-95 transition-transform"
+                >
+                  <PenLine className="w-3.5 h-3.5" />
+                  Nhập lời tay
+                </button>
                 {searchNote && <p className="text-xs text-amber-200">{searchNote}</p>}
               </div>
             )}
@@ -517,10 +709,6 @@ const KaraokeBody: React.FC = () => {
                           : ({
                               // Active line: --p is driven per frame by useSmoothClock.
                               ...(isActive ? {} : { '--p': isPassed ? '100%' : '0%' }),
-                              backgroundImage: 'linear-gradient(90deg, #ffffff var(--p, 0%), rgba(255,255,255,0.35) var(--p, 0%))',
-                              WebkitBackgroundClip: 'text',
-                              backgroundClip: 'text',
-                              color: 'transparent',
                             } as React.CSSProperties)
                       }
                     >
@@ -566,7 +754,36 @@ const KaraokeBody: React.FC = () => {
                             })}
                         </div>
                       ) : (
-                        <div>{line.text}</div>
+                        <div>
+                          {(() => {
+                            // Fill word by word (weighted by length) so wrapped 2–3 row lines don't sweep all rows at once.
+                            const words = line.text.split(/\s+/).filter(Boolean);
+                            const total = Math.max(1, words.reduce((s, w) => s + w.length + 1, 0));
+                            let acc = 0;
+                            return words.map((word, wIdx) => {
+                              const start = (acc / total) * 100;
+                              acc += word.length + 1;
+                              const span = Math.max(0.01, (acc / total) * 100 - start);
+                              const wp = `clamp(0%, calc((var(--p, 0%) - ${start.toFixed(3)}%) * ${(100 / span).toFixed(4)}), 100%)`;
+                              return (
+                                <React.Fragment key={wIdx}>
+                                  <span
+                                    style={{
+                                      backgroundImage: `linear-gradient(90deg, #ffffff ${wp}, rgba(255,255,255,0.35) ${wp})`,
+                                      WebkitBackgroundClip: 'text',
+                                      backgroundClip: 'text',
+                                      WebkitTextFillColor: 'transparent',
+                                      color: 'transparent',
+                                    }}
+                                  >
+                                    {word}
+                                  </span>
+                                  {wIdx < words.length - 1 ? ' ' : ''}
+                                </React.Fragment>
+                              );
+                            });
+                          })()}
+                        </div>
                       )}
                       {reportedWrongIndices.includes(idx) && (
                         <span
