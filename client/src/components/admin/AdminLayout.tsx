@@ -8,6 +8,7 @@ import {
   UserCheck,
   ArrowLeft,
   Shield,
+  Flag,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore.js';
 import { BottomPlayer } from '../player/BottomPlayer.js';
@@ -72,6 +73,10 @@ export const AdminLayout: React.FC = () => {
           <NavLink to="/admin/library" className={navClass}>
             <Music2 className="w-4 h-4" />
             Thư viện nhạc
+          </NavLink>
+          <NavLink to="/admin/lyrics-reports" className={navClass}>
+            <Flag className="w-4 h-4" />
+            Bài cần sửa lời
           </NavLink>
           <NavLink to="/admin/artists" className={navClass}>
             <Users className="w-4 h-4" />
@@ -150,6 +155,10 @@ export const AdminLayout: React.FC = () => {
         <NavLink to="/admin/library" className={mobileTabClass}>
           <Music2 className="w-4 h-4" />
           <span>Thư viện</span>
+        </NavLink>
+        <NavLink to="/admin/lyrics-reports" className={mobileTabClass}>
+          <Flag className="w-4 h-4" />
+          <span>Sửa lời</span>
         </NavLink>
         <NavLink to="/admin/artists" className={mobileTabClass}>
           <Users className="w-4 h-4" />

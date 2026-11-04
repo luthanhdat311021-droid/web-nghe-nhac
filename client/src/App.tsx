@@ -38,6 +38,7 @@ const AdminMusicLibrary = lazy(() => import('./pages/admin/AdminMusicLibrary.js'
 const AdminArtists = lazy(() => import('./pages/admin/AdminArtists.js').then((m) => ({ default: m.AdminArtists })));
 const AdminAlbums = lazy(() => import('./pages/admin/AdminAlbums.js').then((m) => ({ default: m.AdminAlbums })));
 const AdminUsers = lazy(() => import('./pages/admin/AdminUsers.js').then((m) => ({ default: m.AdminUsers })));
+const AdminLyricsReports = lazy(() => import('./pages/admin/AdminLyricsReports.js').then((m) => ({ default: m.AdminLyricsReports })));
 
 // Admin Route Loading Skeleton
 const AdminLoader: React.FC = () => (
@@ -110,6 +111,7 @@ export const App: React.FC = () => {
           <Route path="artists" element={<AdminArtists />} />
           <Route path="albums" element={<AdminAlbums />} />
           <Route path="users" element={<AdminUsers />} />
+          <Route path="lyrics-reports" element={<AdminLyricsReports />} />
         </Route>
 
         {/* Fallback */}

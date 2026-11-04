@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Music2, Play, Pause, Minus, Plus, Loader2, Search, Sparkles, Languages, Mic, Trophy } from 'lucide-react';
+import { X, Music2, Play, Pause, Minus, Plus, Loader2, Search, Sparkles, Languages, Mic, Trophy, Flag } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { usePlayerStore, useCurrentSong, useIsPlaying } from '../../store/playerStore.js';
 import { useQuizMask, useJamStore } from '../../store/jamStore.js';
@@ -87,8 +87,13 @@ const KaraokeBody: React.FC = () => {
   const [offset, setOffset] = useState(0);
   // Tap-to-sync: the next tapped line is taken as "being sung right now" and the offset is set from it.
   const [syncMode, setSyncMode] = useState(false);
+  // Chế độ "Lời sai chữ": bấm vào một câu để báo sai
+  const [wrongTextMode, setWrongTextMode] = useState(false);
+  const [reportedWrongIndices, setReportedWrongIndices] = useState<number[]>([]);
   const [savingOffset, setSavingOffset] = useState(false);
   const [offsetNote, setOffsetNote] = useState('');
+  const [listeningWithOffsetSec, setListeningWithOffsetSec] = useState(0);
+  const lastSubmittedOffsetRef = useRef<number>(0);
 
   // Parallel translation state
   const [showTranslation, setShowTranslation] = useState(false);
@@ -105,7 +110,11 @@ const KaraokeBody: React.FC = () => {
   useEffect(() => {
     setOffset(0);
     setSyncMode(false);
+    setWrongTextMode(false);
+    setReportedWrongIndices([]);
     setOffsetNote('');
+    setListeningWithOffsetSec(0);
+    lastSubmittedOffsetRef.current = 0;
     setTranslatedCache(null);
     setTranslationError('');
     setSelectedStoryLine(null);
@@ -226,8 +235,77 @@ const KaraokeBody: React.FC = () => {
     userScrollUntil.current = Date.now() + 4000;
   };
 
-  const onLineClick = (lineTime: number) => {
-    if (syncMode) {
+  // Ghi nhận độ lệch người nghe chọn lên server (tự động cân khi có >= 3 người chỉnh giống nhau)
+  const submitListenerOffset = async (chosenOffset: number) => {
+    if (!currentSong?.id || Math.abs(chosenOffset) < 0.25) return;
+    lastSubmittedOffsetRef.current = chosenOffset;
+    try {
+      const res = await songService.reportLyricOffset(currentSong.id, chosenOffset);
+      if (res.data?.autoApplied && res.data.lyrics?.syncedLyrics) {
+        setFoundLyrics(res.data.lyrics);
+        setOffset(0);
+        lastSubmittedOffsetRef.current = 0;
+        setListeningWithOffsetSec(0);
+        setOffsetNote(
+          res.message ||
+            `Đã có ≥3 người chỉnh giống bạn! Server đã tự áp độ lệch trung bình (${
+              (res.data.appliedOffset || 0) > 0 ? '+' : ''
+            }${res.data.appliedOffset}s) cho mọi người nghe sau.`
+        );
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.songDetail(currentSong.id) });
+      } else {
+        const sign = chosenOffset > 0 ? '+' : '';
+        setOffsetNote(
+          `Đã ghi nhận độ lệch ${sign}${chosenOffset.toFixed(2)}s của bạn (${
+            res.data?.pendingVotesCount || 1
+          }/3 người đồng thuận để tự cân cho tất cả).`
+        );
+      }
+    } catch (err: any) {
+      console.warn('Không gửi được báo cáo độ lệch:', err);
+    }
+  };
+
+  // Khi người nghe chỉnh độ lệch rồi nghe tiếp khoảng 20 giây -> tự động ghi nhận độ lệch lên server
+  useEffect(() => {
+    if (Math.abs(offset) < 0.25 || offset === lastSubmittedOffsetRef.current) {
+      setListeningWithOffsetSec(0);
+      return;
+    }
+    if (!isPlaying) return;
+
+    const timer = setInterval(() => {
+      setListeningWithOffsetSec((prev) => {
+        const next = prev + 1;
+        if (next >= 20) {
+          clearInterval(timer);
+          submitListenerOffset(offset);
+          return 20;
+        }
+        return next;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [offset, isPlaying, currentSong.id]);
+
+  // Báo "Lời sai chữ" cho một câu hát cụ thể
+  const handleReportWrongLine = async (lineIdx: number, lineText: string) => {
+    if (!currentSong?.id || !lineText.trim()) return;
+    setWrongTextMode(false);
+    setReportedWrongIndices((prev) => (prev.includes(lineIdx) ? prev : [...prev, lineIdx]));
+    try {
+      await songService.reportWrongLyric(currentSong.id, lineIdx, lineText);
+      setOffsetNote(`Đã báo "Lời sai chữ" câu #${lineIdx + 1}. Bài hát đã vào danh sách cần sửa lời của Admin!`);
+    } catch (err: any) {
+      setOffsetNote(err.response?.data?.message || 'Không gửi được báo cáo lời sai chữ.');
+    }
+  };
+
+  const onLineClick = (lineTime: number, lineIdx?: number, lineText?: string) => {
+    if (wrongTextMode && typeof lineIdx === 'number' && lineText) {
+      handleReportWrongLine(lineIdx, lineText);
+    } else if (syncMode) {
       setOffset(Math.round((lineTime - smoothTimeRef.current) * 4) / 4);
       setSyncMode(false);
       setOffsetNote('');
@@ -423,9 +501,13 @@ const KaraokeBody: React.FC = () => {
                     className="group relative flex items-start justify-between gap-3"
                   >
                     <div
-                      onClick={() => onLineClick(line.time)}
+                      onClick={() => onLineClick(line.time, idx, line.text)}
                       className={`cursor-pointer origin-left font-extrabold leading-snug tracking-tight transition-[opacity,transform] duration-300 ease-out will-change-transform text-2xl md:text-4xl flex-1 ${
-                        syncMode ? 'hover:outline hover:outline-2 hover:outline-amber-300/70 rounded-lg ' : ''
+                        wrongTextMode
+                          ? 'hover:outline hover:outline-2 hover:outline-rose-400/80 rounded-lg px-1 '
+                          : syncMode
+                          ? 'hover:outline hover:outline-2 hover:outline-amber-300/70 rounded-lg px-1 '
+                          : ''
                       }${
                         isActive ? 'scale-100' : isPassed ? 'scale-95 opacity-60 hover:opacity-90' : 'scale-95 opacity-40 hover:opacity-80'
                       }`}
@@ -486,6 +568,14 @@ const KaraokeBody: React.FC = () => {
                       ) : (
                         <div>{line.text}</div>
                       )}
+                      {reportedWrongIndices.includes(idx) && (
+                        <span
+                          className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-rose-500/20 text-rose-300 border border-rose-400/30"
+                          style={{ WebkitTextFillColor: '#fda4af', color: '#fda4af' }}
+                        >
+                          <Flag className="w-3 h-3" /> Đã báo lời sai chữ
+                        </span>
+                      )}
                       {/* Parallel translated Vietnamese line */}
                       {showTranslation && (
                         <div
@@ -506,23 +596,41 @@ const KaraokeBody: React.FC = () => {
                       )}
                     </div>
 
-                    {/* AI Storytelling Button for this line */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleOpenStory(line.text);
-                      }}
-                      title="Gemini kể chuyện & giải thích ý nghĩa câu hát"
-                      aria-label="Kể chuyện câu hát này"
-                      className={`flex-shrink-0 p-2 rounded-xl transition-all duration-200 active:scale-90 flex items-center gap-1.5 ${
-                        isActive
-                          ? 'opacity-100 bg-amber-400/20 text-amber-300 border border-amber-300/40 shadow-sm'
-                          : 'opacity-0 group-hover:opacity-100 bg-white/5 hover:bg-white/10 text-white/70 hover:text-white border border-white/10'
-                      }`}
-                    >
-                      <Sparkles className="w-4 h-4 text-amber-300" />
-                      <span className="hidden sm:inline text-xs font-semibold text-amber-200/90">Ý nghĩa</span>
-                    </button>
+                    {/* Action Buttons for this line: Báo lời sai chữ & AI Storytelling */}
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleReportWrongLine(idx, line.text);
+                        }}
+                        title="Báo câu này bị sai chữ"
+                        aria-label="Báo lời sai chữ câu này"
+                        className={`p-2 rounded-xl transition-all duration-200 active:scale-90 flex items-center gap-1 ${
+                          reportedWrongIndices.includes(idx)
+                            ? 'opacity-100 bg-rose-500/20 text-rose-300 border border-rose-400/40'
+                            : 'opacity-0 group-hover:opacity-100 bg-white/5 hover:bg-rose-500/20 text-white/60 hover:text-rose-200 border border-white/10'
+                        }`}
+                      >
+                        <Flag className="w-3.5 h-3.5" />
+                      </button>
+
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenStory(line.text);
+                        }}
+                        title="Gemini kể chuyện & giải thích ý nghĩa câu hát"
+                        aria-label="Kể chuyện câu hát này"
+                        className={`p-2 rounded-xl transition-all duration-200 active:scale-90 flex items-center gap-1.5 ${
+                          isActive
+                            ? 'opacity-100 bg-amber-400/20 text-amber-300 border border-amber-300/40 shadow-sm'
+                            : 'opacity-0 group-hover:opacity-100 bg-white/5 hover:bg-white/10 text-white/70 hover:text-white border border-white/10'
+                        }`}
+                      >
+                        <Sparkles className="w-4 h-4 text-amber-300" />
+                        <span className="hidden sm:inline text-xs font-semibold text-amber-200/90">Ý nghĩa</span>
+                      </button>
+                    </div>
                   </div>
                 </React.Fragment>
               );
@@ -551,10 +659,25 @@ const KaraokeBody: React.FC = () => {
           />
           <span className="w-10">{formatDuration(duration)}</span>
         </div>
-        {lines.length > 0 && (syncMode || offsetNote || (isAdmin && offset !== 0)) && (
+        {lines.length > 0 && (syncMode || wrongTextMode || offsetNote || offset !== 0) && (
           <div className="flex flex-wrap items-center justify-center gap-2 text-xs">
             {syncMode && <span className="text-amber-200">Chạm vào dòng mà ca sĩ đang hát ngay lúc này…</span>}
-            {!syncMode && isAdmin && offset !== 0 && (
+            {wrongTextMode && <span className="text-rose-300 font-semibold">Chạm vào câu hát bị sai chữ để báo cho hệ thống…</span>}
+            {!syncMode && !wrongTextMode && Math.abs(offset) >= 0.25 && offset !== lastSubmittedOffsetRef.current && (
+              <div className="flex items-center gap-2">
+                <span className="text-cyan-200">
+                  Độ lệch {offset > 0 ? '+' : ''}
+                  {offset.toFixed(2)}s (tự ghi nhận sau {Math.max(0, 20 - listeningWithOffsetSec)}s nghe)
+                </span>
+                <button
+                  onClick={() => submitListenerOffset(offset)}
+                  className="rounded-full bg-cyan-400/20 hover:bg-cyan-400/30 border border-cyan-400/40 text-cyan-200 px-2.5 py-0.5 font-semibold transition-colors"
+                >
+                  Gửi báo lệch ngay
+                </button>
+              </div>
+            )}
+            {!syncMode && !wrongTextMode && isAdmin && offset !== 0 && (
               <button
                 onClick={saveOffset}
                 disabled={savingOffset}
@@ -563,12 +686,12 @@ const KaraokeBody: React.FC = () => {
                 {savingOffset ? 'Đang lưu…' : 'Lưu độ lệch cho mọi người'}
               </button>
             )}
-            {offsetNote && <span className="text-emerald-300">{offsetNote}</span>}
+            {offsetNote && <span className="text-emerald-300 text-center">{offsetNote}</span>}
           </div>
         )}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           {lines.length > 0 ? (
-            <div className="flex items-center gap-0.5 text-xs text-text-muted" title="Chỉnh lời nhanh/chậm hơn nhạc">
+            <div className="flex flex-wrap items-center gap-0.5 text-xs text-text-muted" title="Chỉnh lời nhanh/chậm hơn nhạc">
               <button onClick={() => setOffset((o) => o - 1)} aria-label="Lời chậm lại 1 giây" className="px-1.5 py-2 rounded-full hover:bg-white/10 hover:text-white font-mono">
                 -1s
               </button>
@@ -585,13 +708,32 @@ const KaraokeBody: React.FC = () => {
                 +1s
               </button>
               <button
-                onClick={() => setSyncMode((v) => !v)}
+                onClick={() => {
+                  setSyncMode((v) => !v);
+                  setWrongTextMode(false);
+                }}
                 aria-pressed={syncMode}
                 className={`ml-1 px-2.5 py-1 rounded-full border text-[11px] font-semibold ${
                   syncMode ? 'bg-amber-300 text-black border-amber-300' : 'border-white/15 text-white/80 hover:bg-white/10'
                 }`}
               >
                 Canh lời
+              </button>
+              <button
+                onClick={() => {
+                  setWrongTextMode((v) => !v);
+                  setSyncMode(false);
+                }}
+                aria-pressed={wrongTextMode}
+                title="Bấm vào đây rồi chạm vào câu hát bị sai chữ để báo lỗi"
+                className={`ml-1 px-2.5 py-1 rounded-full border text-[11px] font-semibold flex items-center gap-1 ${
+                  wrongTextMode
+                    ? 'bg-rose-500 text-white border-rose-400 shadow-[0_0_10px_rgba(244,63,94,0.4)]'
+                    : 'border-white/15 text-white/80 hover:bg-white/10'
+                }`}
+              >
+                <Flag className="w-3 h-3" />
+                <span>Lời sai chữ</span>
               </button>
             </div>
           ) : <span />}

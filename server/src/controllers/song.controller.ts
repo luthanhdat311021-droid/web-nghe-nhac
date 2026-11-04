@@ -901,3 +901,46 @@ export const explainSongLyric = async (req: AuthenticatedRequest, res: Response)
     return sendError(res, error.message || 'Lỗi khi giải thích ý nghĩa câu hát bằng AI.', 500);
   }
 };
+
+export const reportSongLyricIssue = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { type, offsetSec, lineIndex, lineText, clientKey } = req.body || {};
+
+    if (type !== 'OFFSET' && type !== 'WRONG_TEXT') {
+      return sendError(res, 'Loại báo cáo lời bài hát không hợp lệ.', 400);
+    }
+
+    const userId = req.user?.userId || null;
+    const ip = String(req.headers['x-forwarded-for'] || req.ip || 'anon').split(',')[0].trim();
+    const reporterKey = userId
+      ? `user:${userId}`
+      : clientKey
+      ? `client:${String(clientKey).slice(0, 64)}`
+      : `ip:${ip}`;
+
+    const { submitLyricReport } = await import('../services/lyricFeedback.js');
+    const result = await submitLyricReport({
+      songId: id,
+      userId,
+      reporterKey,
+      type,
+      offsetSec: typeof offsetSec === 'number' ? offsetSec : Number(offsetSec),
+      lineIndex: typeof lineIndex === 'number' ? lineIndex : undefined,
+      lineText: typeof lineText === 'string' ? lineText : undefined,
+    });
+
+    const appliedVal = result.type === 'OFFSET' && result.autoApplied ? result.appliedOffset || 0 : 0;
+    const msg =
+      result.type === 'OFFSET'
+        ? result.autoApplied
+          ? `Đã tự động cân chỉnh độ lệch trung bình (${appliedVal > 0 ? '+' : ''}${appliedVal}s) cho mọi người nghe!`
+          : 'Đã ghi nhận độ lệch lời của bạn.'
+        : 'Đã ghi nhận báo cáo lời sai chữ.';
+
+    return sendSuccess(res, result, msg);
+  } catch (error: any) {
+    console.error('LYRIC_REPORT_ERROR:', error);
+    return sendError(res, error.message || 'Không thể gửi báo cáo lời bài hát.', 400);
+  }
+};

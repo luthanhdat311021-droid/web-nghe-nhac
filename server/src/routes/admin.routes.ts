@@ -7,6 +7,10 @@ import {
   createMediaUploadUrl,
   lookupLyrics,
   aiTranscribeLyrics,
+  getLyricsReports,
+  reanalyzeSongLyrics,
+  applyReportedOffset,
+  resolveLyricsReports,
   createSong,
   deleteAlbum,
   deleteArtist,
@@ -49,6 +53,10 @@ router.post('/media/upload-url', uploadRateLimiter, createMediaUploadUrl);
 router.get('/lyrics/lookup', searchRateLimiter, lookupLyrics);
 router.post('/lyrics/ai-transcribe', uploadRateLimiter, upload.fields([{ name: 'audioFile', maxCount: 1 }]), aiTranscribeLyrics);
 router.post('/songs/:id/auto-lyrics', searchRateLimiter, autoLyricsForSong);
+router.get('/lyrics/reports', getLyricsReports);
+router.post('/songs/:id/reanalyze-lyrics', searchRateLimiter, reanalyzeSongLyrics);
+router.post('/songs/:id/apply-offset', applyReportedOffset);
+router.post('/songs/:id/resolve-lyrics-reports', resolveLyricsReports);
 router.post(
   '/songs/import-song',
   upload.fields([

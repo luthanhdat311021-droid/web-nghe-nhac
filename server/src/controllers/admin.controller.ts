@@ -93,6 +93,69 @@ export const autoLyricsForSong = async (req: AuthenticatedRequest, res: Response
   return sendSuccess(res, lyrics, 'Đã tìm và lưu lời bài hát.');
 };
 
+/** Admin: lấy danh sách "Bài cần sửa lời" xếp theo số lượt báo của người nghe */
+export const getLyricsReports = async (_req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { getAdminReportedSongs } = await import('../services/lyricFeedback.js');
+    const data = await getAdminReportedSongs();
+    return sendSuccess(res, data);
+  } catch (err: any) {
+    console.error('[LyricsReports] getLyricsReports error:', err);
+    return sendError(res, err.message || 'Không thể tải danh sách bài cần sửa lời.', 500);
+  }
+};
+
+/** Admin: bấm 1 nút chạy lại AI phân tích lời cho bài hát & đóng các lượt báo lỗi */
+export const reanalyzeSongLyrics = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { reanalyzeSongLyricsWithAI } = await import('../services/lyricFeedback.js');
+    const result = await reanalyzeSongLyricsWithAI(req.params.id);
+    return sendSuccess(res, result, 'AI đã phân tích và cập nhật lại lời bài hát thành công!');
+  } catch (err: any) {
+    console.error('[LyricsReports] reanalyzeSongLyrics error:', err);
+    return sendError(res, err.message || 'Không thể chạy lại AI phân tích lời.', 500);
+  }
+};
+
+/** Admin: áp dụng ngay độ lệch trung bình được người nghe báo cáo cho bài hát */
+export const applyReportedOffset = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const songId = req.params.id;
+    const offsetSec = Number(req.body?.offsetSec);
+    if (!Number.isFinite(offsetSec) || Math.abs(offsetSec) < 0.1) {
+      return sendError(res, 'Độ lệch không hợp lệ.', 400);
+    }
+    const { applyOffsetToSongLyrics } = await import('../services/lyricFeedback.js');
+    const updated = await applyOffsetToSongLyrics(songId, offsetSec);
+    if (!updated) {
+      return sendError(res, 'Bài hát chưa có lời đồng bộ (syncedLyrics) để dịch mốc thời gian.', 400);
+    }
+    await prisma.lyricReport.updateMany({
+      where: { songId, type: 'OFFSET', status: 'PENDING' },
+      data: { status: 'APPLIED' },
+    });
+    return sendSuccess(res, updated, `Đã áp dụng độ lệch ${offsetSec > 0 ? '+' : ''}${offsetSec}s cho mọi người nghe!`);
+  } catch (err: any) {
+    console.error('[LyricsReports] applyReportedOffset error:', err);
+    return sendError(res, err.message || 'Không thể áp dụng độ lệch.', 500);
+  }
+};
+
+/** Admin: đánh dấu đã xử lý xong các lượt báo lời của bài hát */
+export const resolveLyricsReports = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const songId = req.params.id;
+    await prisma.lyricReport.updateMany({
+      where: { songId, status: 'PENDING' },
+      data: { status: 'RESOLVED' },
+    });
+    return sendSuccess(res, { resolved: true }, 'Đã đánh dấu hoàn tất sửa lời cho bài hát.');
+  } catch (err: any) {
+    console.error('[LyricsReports] resolveLyricsReports error:', err);
+    return sendError(res, err.message || 'Không thể cập nhật trạng thái báo cáo.', 500);
+  }
+};
+
 // Dashboard KPIs and analytics
 export const getDashboardStats = async (_req: AuthenticatedRequest, res: Response) => {
   try {

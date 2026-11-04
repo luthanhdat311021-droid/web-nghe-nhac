@@ -13,6 +13,7 @@ import {
   getYoutubeInfo,
   translateSongLyrics,
   explainSongLyric,
+  reportSongLyricIssue,
 } from '../controllers/song.controller.js';
 import { optionalAuth, requireAuth } from '../middleware/auth.js';
 import { upload } from '../middleware/upload.js';
@@ -32,6 +33,7 @@ router.use('/:id/ratings', ratingRoutes);
 router.get('/:id', optionalAuth, getSongById);
 router.post('/:id/lyrics/translate', optionalAuth, translateSongLyrics);
 router.post('/:id/lyrics/explain', optionalAuth, explainSongLyric);
+router.post('/:id/lyrics/report', optionalAuth, reportSongLyricIssue);
 router.post(
   '/',
   requireAuth,

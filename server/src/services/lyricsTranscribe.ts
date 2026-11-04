@@ -51,7 +51,7 @@ const finish = (lines: { time: number; text: string }[], engine: 'whisper' | 'ge
 /** Whisper (precise word timing) for audio files when GROQ_API_KEY is set; Gemini for YouTube links or as fallback. */
 export async function transcribeLyrics(
   source: TranscribeSource,
-  hint: { title?: string; artist?: string; lyrics?: string }
+  hint: { title?: string; artist?: string; lyrics?: string; forceAi?: boolean }
 ) {
   // Published wording beats anything heard, but LRCLIB's timestamps belong to the official audio:
   // an uploaded MV with a longer intro would run lines early. So its text is the reference the
@@ -63,7 +63,9 @@ export async function transcribeLyrics(
     lrclibSynced = match?.syncedLyrics ?? null;
   }
   const lrclibFallback = () =>
-    lrclibSynced ? { plainLyrics: hint.lyrics || '', syncedLyrics: lrclibSynced, engine: 'lrclib' as const } : null;
+    !hint.forceAi && lrclibSynced
+      ? { plainLyrics: hint.lyrics || '', syncedLyrics: lrclibSynced, engine: 'lrclib' as const }
+      : null;
   if (source.kind === 'audio' && whisperAvailable()) {
     try {
       const vietnamese = /[ăâđêôơưạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹ]/i.test(`${hint.title} ${hint.artist} ${hint.lyrics}`);

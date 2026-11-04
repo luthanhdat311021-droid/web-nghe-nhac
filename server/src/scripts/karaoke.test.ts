@@ -81,3 +81,33 @@ test('Leaderboard correctly sorts participants by highest total score', () => {
   assert.equal(scores[3].username, 'Thanh Thảo');
 });
 
+test('Consensus offset clustering triggers when >= 3 listeners pick similar offsets', async () => {
+  const { findConsensusOffsetCluster, shiftSyncedLyricsText } = await import('../services/lyricFeedback.js');
+
+  // Chưa đủ 3 người -> trả về null
+  const twoVotes = [
+    { id: '1', offsetSec: 4.5 },
+    { id: '2', offsetSec: 4.25 },
+  ];
+  assert.equal(findConsensusOffsetCluster(twoVotes, 1.25, 3), null);
+
+  // 3 người chỉnh gần nhau (+4.25s, +4.5s, +4.75s) và 1 người lệch hẳn (-10s)
+  const fourVotes = [
+    { id: '1', offsetSec: 4.25 },
+    { id: '2', offsetSec: 4.5 },
+    { id: '3', offsetSec: 4.75 },
+    { id: '4', offsetSec: -10.0 },
+  ];
+  const consensus = findConsensusOffsetCluster(fourVotes, 1.25, 3);
+  assert.ok(consensus);
+  assert.equal(consensus.cluster.length, 3);
+  assert.equal(consensus.averageOffset, 4.5);
+
+  // Kiểm tra dịch mốc thời gian LRC đi -4.5s (từ 14.50s về 10.00s)
+  const rawLrc = '[00:14.50] Ngày hôm qua em đã đi xa\n[00:19.00] Để lại anh nơi đây';
+  const shifted = shiftSyncedLyricsText(rawLrc, -consensus.averageOffset);
+  assert.ok(shifted.includes('[00:10.00] Ngày hôm qua em đã đi xa'));
+  assert.ok(shifted.includes('[00:14.50] Để lại anh nơi đây'));
+});
+
+

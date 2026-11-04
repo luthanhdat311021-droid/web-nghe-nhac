@@ -140,6 +140,49 @@ export const adminService = {
     return res.data.data;
   },
 
+  async getLyricsReports() {
+    const res = await api.get<
+      ApiResponse<{
+        summary: {
+          songsNeedFixCount: number;
+          pendingOffsetCount: number;
+          pendingWrongTextCount: number;
+          autoAppliedCount: number;
+        };
+        items: {
+          song: Song;
+          pendingCount: number;
+          totalReports: number;
+          offsetVotes: { id: string; offsetSec: number; status: string; createdAt: string; username?: string }[];
+          suggestedOffsetSec: number | null;
+          wrongLines: { id: string; lineIndex: number | null; lineText: string; count: number; createdAt: string }[];
+          autoAppliedOffsetsCount: number;
+          lastReportedAt: string;
+        }[];
+      }>
+    >('/admin/lyrics/reports');
+    return res.data.data;
+  },
+
+  async reanalyzeSongLyrics(songId: string) {
+    const res = await api.post<ApiResponse<{ lyrics: Lyrics; engine: string }>>(
+      `/admin/songs/${songId}/reanalyze-lyrics`,
+      {},
+      { timeout: 150000 }
+    );
+    return res.data;
+  },
+
+  async applyReportedOffset(songId: string, offsetSec: number) {
+    const res = await api.post<ApiResponse<Lyrics>>(`/admin/songs/${songId}/apply-offset`, { offsetSec });
+    return res.data;
+  },
+
+  async resolveLyricsReports(songId: string) {
+    const res = await api.post<ApiResponse<{ resolved: boolean }>>(`/admin/songs/${songId}/resolve-lyrics-reports`);
+    return res.data;
+  },
+
   async getYoutubeInfo(url: string) {
     const res = await api.get<
       ApiResponse<{

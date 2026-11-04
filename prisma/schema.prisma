@@ -40,6 +40,7 @@ model User {
   createdArtists     Artist[]           @relation("ArtistCreatedBy")
   createdSongs       Song[]             @relation("SongCreatedBy")
   passwordResetOtps  PasswordResetOtp[]
+  lyricReports       LyricReport[]
 
   @@index([role])
   @@index([isBlocked])
@@ -134,6 +135,7 @@ model Song {
   favorites      Favorite[]
   recentlyPlayed RecentlyPlayed[]
   ratings        SongRating[]
+  lyricReports   LyricReport[]
 
   @@index([artistId])
   @@index([albumId])
@@ -401,4 +403,27 @@ model JamMessage {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   @@index([roomId, createdAt])
   @@map("jam_messages")
+}
+
+// Crowd-sourced lyric offset reports & wrong-text reports
+model LyricReport {
+  id          String   @id @default(uuid())
+  songId      String
+  userId      String?
+  reporterKey String
+  type        String   // "OFFSET" | "WRONG_TEXT"
+  offsetSec   Float?
+  lineIndex   Int?
+  lineText    String?
+  status      String   @default("PENDING") // "PENDING" | "APPLIED" | "RESOLVED"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  song Song  @relation(fields: [songId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([songId, status])
+  @@index([songId, type, status])
+  @@index([createdAt(sort: Desc)])
+  @@map("lyric_reports")
 }

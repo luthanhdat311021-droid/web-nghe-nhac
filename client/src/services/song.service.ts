@@ -146,4 +146,50 @@ export const songService = {
     >(`/songs/${id}/lyrics/explain`, { lineText });
     return res.data.data;
   },
+
+  async reportLyricOffset(id: string, offsetSec: number) {
+    let clientKey = localStorage.getItem('musicwave_client_key');
+    if (!clientKey) {
+      clientKey = Math.random().toString(36).slice(2) + Date.now().toString(36);
+      localStorage.setItem('musicwave_client_key', clientKey);
+    }
+    const res = await api.post<
+      ApiResponse<{
+        type: 'OFFSET';
+        autoApplied: boolean;
+        appliedOffset?: number;
+        supportersCount?: number;
+        recordedOffset?: number;
+        pendingVotesCount?: number;
+        lyrics?: any;
+      }>
+    >(`/songs/${id}/lyrics/report`, {
+      type: 'OFFSET',
+      offsetSec,
+      clientKey,
+    });
+    return res.data;
+  },
+
+  async reportWrongLyric(id: string, lineIndex: number, lineText: string) {
+    let clientKey = localStorage.getItem('musicwave_client_key');
+    if (!clientKey) {
+      clientKey = Math.random().toString(36).slice(2) + Date.now().toString(36);
+      localStorage.setItem('musicwave_client_key', clientKey);
+    }
+    const res = await api.post<
+      ApiResponse<{
+        type: 'WRONG_TEXT';
+        reported: boolean;
+        lineIndex?: number;
+        lineText: string;
+      }>
+    >(`/songs/${id}/lyrics/report`, {
+      type: 'WRONG_TEXT',
+      lineIndex,
+      lineText,
+      clientKey,
+    });
+    return res.data;
+  },
 };
