@@ -5,6 +5,10 @@
   "outputDirectory": "client/dist",
   "rewrites": [
     {
+      "source": "/api/music-pro/sepay/webhook",
+      "destination": "http://musicwave-env.eba-jen3axxp.ap-southeast-1.elasticbeanstalk.com/api/music-pro/sepay/webhook"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/index.ts"
     },
