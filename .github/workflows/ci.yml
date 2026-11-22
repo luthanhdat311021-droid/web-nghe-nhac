@@ -1,0 +1,75 @@
+# CI: every push and pull request must typecheck, pass the tests and build before it reaches main.
+# CD is done by Vercel's GitHub integration (merge to main → production, PR → preview link).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  server:
+    name: Server (typecheck + tests)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      # The repo keeps two copies of the schema (root for Vercel, server/ for the API); they must not drift.
+      - name: Schemas are identical
+        run: diff ../prisma/schema.prisma prisma/schema.prisma
+      - run: npx prisma generate
+      - run: npx tsc --noEmit -p .
+      - name: Tests
+        run: npx tsx --test src/scripts/*.test.ts
+
+  client:
+    name: Client (typecheck + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      - run: npm ci
+      - run: npm run build
+
+  database:
+    # Catches code that needs a column the production database does not have yet
+    # (like lyrics.translatedLyrics). Read-only: it only compares, never changes the database.
+    name: Database matches schema
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Compare schema with production database
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::warning::Secret DATABASE_URL is not set; skipping the database check."
+            exit 0
+          fi
+          npx --yes prisma@5.22.0 migrate diff \
+            --from-url "$DATABASE_URL" \
+            --to-schema-datamodel prisma/schema.prisma \
+            --exit-code --script \
+          || { echo "::error::Production database is missing changes from prisma/schema.prisma (SQL above). Apply them before deploying."; exit 1; }

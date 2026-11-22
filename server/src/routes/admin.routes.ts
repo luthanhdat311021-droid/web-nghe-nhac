@@ -11,6 +11,7 @@ import {
   reanalyzeSongLyrics,
   applyReportedOffset,
   resolveLyricsReports,
+  saveAlignedSongLyrics,
   createSong,
   deleteAlbum,
   deleteArtist,
@@ -57,6 +58,7 @@ router.get('/lyrics/reports', getLyricsReports);
 router.post('/songs/:id/reanalyze-lyrics', searchRateLimiter, reanalyzeSongLyrics);
 router.post('/songs/:id/apply-offset', applyReportedOffset);
 router.post('/songs/:id/resolve-lyrics-reports', resolveLyricsReports);
+router.put('/songs/:id/aligned-lyrics', saveAlignedSongLyrics);
 router.post(
   '/songs/import-song',
   upload.fields([

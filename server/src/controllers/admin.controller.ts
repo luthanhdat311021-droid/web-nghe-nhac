@@ -141,6 +141,30 @@ export const applyReportedOffset = async (req: AuthenticatedRequest, res: Respon
   }
 };
 
+const alignedLyricsSchema = z.object({
+  lines: z.array(z.object({
+    time: z.number().min(0).max(3600),
+    text: z.string().trim().min(1).max(500),
+    words: z.array(z.object({ time: z.number().min(0).max(3600), text: z.string().max(100) })).max(200).optional(),
+  })).min(1).max(1000),
+});
+
+/** Admin: nhận lời đã căn chỉnh (mốc từng dòng và từng từ) từ pipeline chạy trên Colab */
+export const saveAlignedSongLyrics = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const parsed = alignedLyricsSchema.safeParse(req.body);
+    if (!parsed.success) return sendError(res, 'Dữ liệu lời căn chỉnh không hợp lệ.', 400);
+    const lines = [...parsed.data.lines].sort((a, b) => a.time - b.time);
+    const { saveAlignedLyrics } = await import('../services/lyricFeedback.js');
+    const saved = await saveAlignedLyrics(req.params.id, lines);
+    if (!saved) return sendError(res, 'Không tìm thấy bài hát.', 404);
+    return sendSuccess(res, { songId: saved.songId, lines: lines.length }, 'Đã lưu lời căn chỉnh.');
+  } catch (err: any) {
+    console.error('[AlignedLyrics] save error:', err);
+    return sendError(res, err.message || 'Không thể lưu lời căn chỉnh.', 500);
+  }
+};
+
 /** Admin: đánh dấu đã xử lý xong các lượt báo lời của bài hát */
 export const resolveLyricsReports = async (req: AuthenticatedRequest, res: Response) => {
   try {

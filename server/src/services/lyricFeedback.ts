@@ -54,6 +54,16 @@ export function shiftSyncedLyricsText(raw: string, shiftSec: number): string {
   const lines = parseSyncedLrcOrJson(raw);
   if (lines.length === 0) return raw;
 
+  // Word-timed JSON (from the forced-alignment pipeline) stays JSON so the per-word timings survive.
+  if (raw.trimStart().startsWith('[{')) {
+    const shift = (t: number) => Math.max(0, Math.round((t + shiftSec) * 100) / 100);
+    return JSON.stringify(lines.map((line: any) => ({
+      ...line,
+      time: shift(line.time),
+      ...(Array.isArray(line.words) && { words: line.words.map((w: any) => ({ ...w, time: shift(w.time) })) }),
+    })));
+  }
+
   return lines
     .map(({ time, text }) => {
       const t = Math.max(0, time + shiftSec);
@@ -139,6 +149,27 @@ export async function applyOffsetToSongLyrics(songId: string, userOffsetSec: num
 
   appCache.invalidatePrefix('songs:');
   return updated;
+}
+
+/**
+ * Store lyrics timed offline (Colab forced-alignment pipeline). Lines are saved as JSON so optional
+ * per-word timings ride along; every reader of syncedLyrics already accepts JSON `{ time, text }[]`.
+ */
+export async function saveAlignedLyrics(
+  songId: string,
+  lines: { time: number; text: string; words?: { time: number; text: string }[] }[]
+) {
+  const song = await prisma.song.findUnique({ where: { id: songId }, select: { id: true } });
+  if (!song) return null;
+  const syncedLyrics = JSON.stringify(lines);
+  const plainLyrics = lines.map((l) => l.text).join('\n');
+  const saved = await prisma.lyrics.upsert({
+    where: { songId },
+    create: { songId, plainLyrics, syncedLyrics, isSynced: true },
+    update: { syncedLyrics, isSynced: true },
+  });
+  appCache.invalidatePrefix('songs:');
+  return saved;
 }
 
 /**
