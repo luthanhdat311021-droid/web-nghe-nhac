@@ -854,23 +854,8 @@ const KaraokeBody: React.FC = () => {
             })}
           </div>
         ) : (
-          <div className="max-w-xl w-full text-center my-auto py-16">
-            {/* Lời chưa có mốc thời gian: cho admin căn bằng AI, lời có sẵn được điền sẵn vào khung nhập */}
-            {isAdmin && (
-              <div className="mb-8 space-y-2">
-                <p className="text-xs text-text-muted">Lời bài này chưa có mốc thời gian nên chưa chạy theo nhạc.</p>
-                <button
-                  onClick={openManual}
-                  className="inline-flex items-center gap-2 rounded-full bg-white text-black px-4 py-2 text-xs font-bold active:scale-95 transition-transform"
-                >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  Căn lời bằng AI
-                </button>
-              </div>
-            )}
-            <div className="whitespace-pre-line text-lg md:text-xl text-text-secondary leading-loose">
-              {lyrics?.plainLyrics}
-            </div>
+          <div className="max-w-xl w-full text-center my-auto py-16 whitespace-pre-line text-lg md:text-xl text-text-secondary leading-loose">
+            {lyrics?.plainLyrics}
           </div>
         )}
       </div>

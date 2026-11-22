@@ -56,3 +56,12 @@ server/prisma/*.db
 
 # Local FoodGo backup (contains personal data and secrets)
 foodgo-backup/
+
+# Documents & generated files (keep out of git)
+*.docx
+*.pptx
+*.pdf
+upload_to_drive/
+__pycache__/
+*.pyc
+*.zip
