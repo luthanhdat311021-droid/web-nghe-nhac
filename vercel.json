@@ -5,16 +5,16 @@
   "outputDirectory": "client/dist",
   "rewrites": [
     {
-      "source": "/api/music-pro/sepay/webhook",
-      "destination": "http://musicwave-env.eba-jen3axxp.ap-southeast-1.elasticbeanstalk.com/api/music-pro/sepay/webhook"
+      "source": "/api/:path*",
+      "destination": "http://musicwave-env.eba-jen3axxp.ap-southeast-1.elasticbeanstalk.com/api/:path*"
     },
     {
-      "source": "/api/(.*)",
-      "destination": "/api/index.ts"
+      "source": "/uploads/:path*",
+      "destination": "http://musicwave-env.eba-jen3axxp.ap-southeast-1.elasticbeanstalk.com/uploads/:path*"
     },
     {
-      "source": "/uploads/(.*)",
-      "destination": "/api/index.ts"
+      "source": "/health",
+      "destination": "http://musicwave-env.eba-jen3axxp.ap-southeast-1.elasticbeanstalk.com/health"
     },
     {
       "source": "/(.*)",
