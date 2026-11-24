@@ -65,3 +65,4 @@ upload_to_drive/
 __pycache__/
 *.pyc
 *.zip
+deploy/aws/*.zip

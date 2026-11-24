@@ -6,7 +6,7 @@ import { prisma } from '../services/prisma.js';
 import { requireAuth } from '../middleware/auth.js';
 import { AuthenticatedRequest } from '../types/index.js';
 import { sendSuccess, sendError } from '../utils/response.js';
-import { AD_SECONDS, FREE_LIMIT, FREE_PLAYLIST_LIMIT, PAYMENT_CLOCK_SKEW_MS, PRO_DAYS, PRO_PRICE, extendPro, isPro, paymentCode, vietnamDay } from '../services/musicPolicy.js';
+import { AD_SECONDS, FREE_LIMIT, FREE_PLAYLIST_LIMIT, PAYMENT_CLOCK_SKEW_MS, PRO_DAYS, PRO_PRICE, extendPro, hasPro, paymentCode, vietnamDay } from '../services/musicPolicy.js';
 import { config } from '../config/index.js';
 
 const router = Router();
@@ -30,7 +30,7 @@ router.get('/status', requireAuth, wrap(async (req, res) => {
   const user = await prisma.user.findUniqueOrThrow({ where: { id: req.user!.userId } });
   const usage = await prisma.dailyUsage.findUnique({ where: { userId_day: { userId: user.id, day: vietnamDay() } } });
   const playlistCount = await prisma.playlist.count({ where: { userId: user.id } });
-  return sendSuccess(res, { isPro: isPro(user.proExpiresAt), proExpiresAt: user.proExpiresAt,
+  return sendSuccess(res, { isPro: hasPro(user), isLifetime: user.role === 'ADMIN', proExpiresAt: user.proExpiresAt,
     used: usage?.count || 0, limit: FREE_LIMIT, price: PRO_PRICE, days: PRO_DAYS,
     playlistCount, playlistLimit: FREE_PLAYLIST_LIMIT,
     paymentEnabled: !!process.env.SEPAY_WEBHOOK_KEY });
@@ -41,7 +41,7 @@ router.post('/orders', requireAuth, wrap(async (req, res) => {
   const order = await prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT id FROM users WHERE id = ${req.user!.userId} FOR UPDATE`;
     const user = await tx.user.findUniqueOrThrow({ where: { id: req.user!.userId } });
-    if (isPro(user.proExpiresAt)) return null;
+    if (hasPro(user)) return null;
     const existing = await tx.paymentOrder.findFirst({ where: { userId: req.user!.userId, status: 'PENDING', expiresAt: { gt: new Date() } } });
     return existing || tx.paymentOrder.create({ data: { userId: req.user!.userId,
       code: `MW${randomBytes(12).toString('hex').toUpperCase()}`, amount: PRO_PRICE,
@@ -107,7 +107,7 @@ router.post('/playback/:songId/prepare', requireAuth, wrap(async (req, res) => {
   const userId = req.user!.userId;
   if (!await prisma.song.findUnique({ where: { id: req.params.songId }, select: { id: true } })) return sendError(res, 'Bài hát không tồn tại.', 404);
   const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
-  const pro = isPro(user.proExpiresAt) || await inJam(userId);
+  const pro = hasPro(user) || await inJam(userId);
   const usage = await prisma.dailyUsage.findUnique({ where: { userId_day: { userId, day: vietnamDay() } } });
   if (!pro && (usage?.count || 0) >= FREE_LIMIT) return sendError(res, 'Bạn đã nghe đủ 3 lượt hôm nay. Nâng cấp Music Pro để nghe không giới hạn.', 403);
   const seconds = pro ? 0 : AD_SECONDS;
@@ -127,7 +127,7 @@ router.post('/playback/:sessionId/start', requireAuth, wrap(async (req, res) => 
     const song = await tx.song.findUnique({ where: { id: session.songId } });
     if (!song) return null;
     if (!session.consumedAt) {
-      if (!isPro(user.proExpiresAt, now) && !(!session.adRequired && await inJam(userId))) {
+      if (!hasPro(user, now) && !(!session.adRequired && await inJam(userId))) {
         if (!session.adRequired) return null; // Pro expired after preparation: request a new ad-backed session.
         const key = { userId, day: vietnamDay(now) };
         const usage = await tx.dailyUsage.upsert({ where: { userId_day: key }, create: key, update: {} });

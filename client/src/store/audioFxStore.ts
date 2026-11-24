@@ -35,7 +35,9 @@ const loadSettings = (): FxSettings => {
 };
 
 export const isProUser = () => {
-  const expires = useAuthStore.getState().user?.proExpiresAt;
+  const user = useAuthStore.getState().user;
+  if (user?.role === 'ADMIN') return true; // Admins always have Music Pro.
+  const expires = user?.proExpiresAt;
   return !!expires && new Date(expires).getTime() > Date.now();
 };
 

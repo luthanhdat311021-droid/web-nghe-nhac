@@ -5,7 +5,7 @@ import api from '../services/api.js';
 import { useAuthStore } from '../store/authStore.js';
 import { FREE_PLAYLIST_LIMIT } from '../services/playlist.service.js';
 
-type Status = { isPro: boolean; proExpiresAt: string | null; used: number; limit: number; playlistCount: number; playlistLimit: number; paymentEnabled: boolean };
+type Status = { isPro: boolean; isLifetime?: boolean; proExpiresAt: string | null; used: number; limit: number; playlistCount: number; playlistLimit: number; paymentEnabled: boolean };
 type Order = { id: string; code: string; amount: number; status: string; expiresAt: string; qrUrl: string; bank: string; accountNumber: string };
 export const MusicPro: React.FC = () => {
   const token = useAuthStore(s => s.token);
@@ -51,7 +51,8 @@ export const MusicPro: React.FC = () => {
       <Crown className="text-amber-300 w-10 h-10 mb-4" />
       <h1 className="text-3xl sm:text-4xl font-bold text-white">Âm nhạc không giới hạn.</h1>
       <p className="text-text-secondary mt-3">Music Pro — trọn vẹn từng bài hát, không quảng cáo của MusicWave.</p>
-      {status?.isPro && <p className="text-emerald-300 mt-4" role="status">Pro đang hoạt động đến {new Date(status.proExpiresAt!).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })} (giờ Việt Nam).</p>}
+      {status?.isPro && status.isLifetime && <p className="text-emerald-300 mt-4" role="status">Tài khoản quản trị luôn có Music Pro.</p>}
+      {status?.isPro && !status.isLifetime && <p className="text-emerald-300 mt-4" role="status">Pro đang hoạt động đến {new Date(status.proExpiresAt!).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })} (giờ Việt Nam).</p>}
     </div>
     <div className="grid sm:grid-cols-2 gap-4">
       <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 space-y-4">

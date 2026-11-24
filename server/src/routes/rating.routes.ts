@@ -4,7 +4,7 @@ import { prisma } from '../services/prisma.js';
 import { optionalAuth, requireAuth } from '../middleware/auth.js';
 import { AuthenticatedRequest } from '../types/index.js';
 import { sendSuccess, sendError } from '../utils/response.js';
-import { isPro } from '../services/musicPolicy.js';
+import { hasPro } from '../services/musicPolicy.js';
 
 const router = Router({ mergeParams: true });
 const wrap = (fn: (req: AuthenticatedRequest, res: Response) => Promise<unknown>) =>
@@ -23,7 +23,7 @@ router.get('/', optionalAuth, wrap(async (req, res) => {
     prisma.songRating.aggregate({ where: { songId }, _avg: { rating: true }, _count: true }),
     prisma.songRating.findMany({ where: { songId }, orderBy: { updatedAt: 'desc' }, take: 20, include: { user: userSelect } }),
     userId ? prisma.songRating.findUnique({ where: { userId_songId: { userId, songId } } }) : null,
-    userId ? prisma.user.findUnique({ where: { id: userId }, select: { proExpiresAt: true } }) : null,
+    userId ? prisma.user.findUnique({ where: { id: userId }, select: { role: true, proExpiresAt: true } }) : null,
   ]);
   if (userId) res.setHeader('Cache-Control', 'private, no-store');
   return sendSuccess(res, {
@@ -31,7 +31,7 @@ router.get('/', optionalAuth, wrap(async (req, res) => {
     count: stats._count,
     items,
     myRating: mine,
-    canRate: !!viewer && isPro(viewer.proExpiresAt),
+    canRate: !!viewer && hasPro(viewer),
   });
 }));
 
@@ -40,8 +40,8 @@ router.put('/', requireAuth, wrap(async (req, res) => {
   if (!parsed.success) return sendError(res, parsed.error.errors[0]?.message || 'Dữ liệu đánh giá không hợp lệ', 400);
   const userId = req.user!.userId;
   const songId = req.params.id;
-  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { proExpiresAt: true } });
-  if (!isPro(user.proExpiresAt)) return sendError(res, 'Chỉ tài khoản Music Pro mới được đánh giá bài hát.', 403);
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { role: true, proExpiresAt: true } });
+  if (!hasPro(user)) return sendError(res, 'Chỉ tài khoản Music Pro mới được đánh giá bài hát.', 403);
   if (!await prisma.song.findUnique({ where: { id: songId }, select: { id: true } })) return sendError(res, 'Bài hát không tồn tại.', 404);
   const data = { rating: parsed.data.rating, comment: parsed.data.comment || null };
   const rating = await prisma.songRating.upsert({

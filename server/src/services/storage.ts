@@ -1,6 +1,20 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
+import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+
+// AWS S3 backend: used when S3_BUCKET is set. Credentials come from the instance role (Elastic Beanstalk) or env.
+const getS3Config = () => {
+  const bucket = process.env.S3_BUCKET?.trim();
+  if (!bucket) return null;
+  const region = process.env.AWS_REGION?.trim() || 'ap-southeast-1';
+  const base = (process.env.S3_PUBLIC_URL?.trim() || `https://${bucket}.s3.${region}.amazonaws.com`).replace(/\/$/, '');
+  return { bucket, region, base };
+};
+let s3Client: S3Client | null = null;
+const s3 = (region: string) => (s3Client ??= new S3Client({ region }));
+const cleanPath = (p: string) => p.replace(/\.\./g, '').replace(/^[/\\]+/, '');
 
 const getStorageConfig = () => ({
   // Values pasted into dashboards often carry a stray newline or space.
@@ -76,6 +90,8 @@ const publicPrefix = (url: string, bucket: string) => `${url}/storage/v1/object/
 
 /** True for files that live in this app's own public bucket (what direct browser uploads produce). */
 export const isOwnStorageUrl = (value: unknown): value is string => {
+  const s3c = getS3Config();
+  if (s3c && typeof value === 'string' && value.startsWith(`${s3c.base}/`) && !value.includes('..')) return true;
   const { url, bucket } = getStorageConfig();
   return typeof value === 'string' && !!url && value.startsWith(publicPrefix(url, bucket)) && !value.includes('..');
 };
@@ -85,6 +101,17 @@ export const isOwnStorageUrl = (value: unknown): value is string => {
  * Storage with a one-time signed URL. Returns null when storage is not configured or refuses the request.
  */
 export const createSignedUpload = async (objectPath: string) => {
+  const s3c = getS3Config();
+  if (s3c) {
+    const p = cleanPath(objectPath);
+    try {
+      const uploadUrl = await getSignedUrl(s3(s3c.region), new PutObjectCommand({ Bucket: s3c.bucket, Key: p }), { expiresIn: 3600 });
+      return { uploadUrl, publicUrl: `${s3c.base}/${p}` };
+    } catch (err) {
+      console.warn('[S3] createSignedUpload failed:', err);
+      return null;
+    }
+  }
   const { url, key, bucket } = getStorageConfig();
   if (!url || !key) return null;
   const sanitizedPath = objectPath.replace(/\.\./g, '').replace(/^[/\\]+/, '');
@@ -117,6 +144,16 @@ export const uploadBuffer = async (
 ): Promise<string> => {
   const { url, key, bucket } = getStorageConfig();
   const sanitizedPath = objectPath.replace(/\.\./g, '').replace(/^[/\\]+/, '');
+
+  const s3c = getS3Config();
+  if (s3c) {
+    try {
+      await s3(s3c.region).send(new PutObjectCommand({ Bucket: s3c.bucket, Key: sanitizedPath, Body: buffer, ContentType: contentType || 'application/octet-stream' }));
+      return `${s3c.base}/${sanitizedPath}`;
+    } catch (err) {
+      console.warn('[S3] uploadBuffer failed, trying fallback:', err);
+    }
+  }
 
   try {
     if (url && key) {
@@ -167,6 +204,18 @@ export const uploadPublicMedia = async (
   const objectPath = customObjectPath
     ? customObjectPath.replace(/\.\./g, '').replace(/^[/\\]+/, '')
     : `${folder}/${file.filename || Date.now()}`;
+
+  const s3c = getS3Config();
+  if (s3c) {
+    try {
+      const body = await fs.readFile(file.path);
+      await s3(s3c.region).send(new PutObjectCommand({ Bucket: s3c.bucket, Key: objectPath, Body: body, ContentType: file.mimetype || 'application/octet-stream' }));
+      await fs.unlink(file.path).catch(() => {});
+      return `${s3c.base}/${objectPath}`;
+    } catch (err) {
+      console.warn('[S3] uploadPublicMedia failed, trying fallback:', err);
+    }
+  }
 
   try {
     if (url && key) {
@@ -220,6 +269,12 @@ export const deletePublicMedia = async (urlOrPath?: string | null): Promise<void
   const { url, key, bucket } = getStorageConfig();
 
   try {
+    const s3c = getS3Config();
+    if (s3c && urlOrPath.startsWith(`${s3c.base}/`)) {
+      const objectKey = decodeURIComponent(urlOrPath.slice(s3c.base.length + 1));
+      await s3(s3c.region).send(new DeleteObjectCommand({ Bucket: s3c.bucket, Key: objectKey }));
+      return;
+    }
     // 1. Supabase Storage Object URL
     if (url && key && urlOrPath.includes(`/storage/v1/object/public/${bucket}/`)) {
       const parts = urlOrPath.split(`/storage/v1/object/public/${bucket}/`);
