@@ -66,3 +66,4 @@ __pycache__/
 *.pyc
 *.zip
 deploy/aws/*.zip
+infra/cloudformation/packaged.yaml
