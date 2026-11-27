@@ -206,6 +206,60 @@ Resources:
       LogGroupName: !Sub /aws/lambda/${WeeklyReportFunction}
       RetentionInDays: 14
 
+  # ---------------------------------------------------------------- Uptime monitor (mien phi)
+  UptimeCheckFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: musicwave-uptime-check
+      Description: Kiem tra website va API moi 5 phut, ghi metric MusicWave/Uptime
+      CodeUri: ../lambda/uptime-check/
+      Handler: index.handler
+      Runtime: nodejs22.x
+      Architectures: [arm64]
+      MemorySize: 128
+      Timeout: 30
+      Environment:
+        Variables:
+          API_URL: !Ref ApiUrl
+          WEBSITE_URL: !Ref WebsiteUrl
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: cloudwatch:PutMetricData
+              Resource: '*'
+              Condition:
+                StringEquals: { 'cloudwatch:namespace': MusicWave/Uptime }
+      Events:
+        Every5Minutes:
+          Type: ScheduleV2
+          Properties:
+            Name: musicwave-uptime-check
+            Description: Kiem tra uptime moi 5 phut
+            ScheduleExpression: rate(5 minutes)
+
+  UptimeCheckLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${UptimeCheckFunction}
+      RetentionInDays: 7
+
+  UptimeDownAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: musicwave-uptime-down
+      AlarmDescription: Website hoac API MusicWave khong phan hoi 2 lan kiem tra lien tiep (10 phut)
+      Namespace: MusicWave/Uptime
+      MetricName: Up
+      Statistic: Minimum
+      Period: 300
+      EvaluationPeriods: 2
+      DatapointsToAlarm: 2
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: missing
+      AlarmActions: [!Ref AlertsTopic]
+      OKActions: [!Ref AlertsTopic]
+
   # ---------------------------------------------------------------- Dashboard
   Dashboard:
     Type: AWS::CloudWatch::Dashboard
@@ -215,7 +269,10 @@ Resources:
         - |
           {"widgets":[
           {"type":"text","x":0,"y":0,"width":24,"height":2,"properties":{"markdown":"# MusicWave tren AWS (${AWS::Region})\nS3 Website -> Elastic Beanstalk (EC2) -> RDS PostgreSQL | Upload nhac -> EventBridge -> Lambda | Canh bao qua SNS. Tao boi CloudFormation stack ${AWS::StackName}."}},
-          {"type":"alarm","x":0,"y":2,"width":24,"height":3,"properties":{"title":"Trang thai canh bao","alarms":["${CpuArn}","${EbArn}","${RdsArn}","${LambdaArn}"]}},
+          {"type":"alarm","x":0,"y":2,"width":24,"height":3,"properties":{"title":"Trang thai canh bao","alarms":["${UptimeArn}","${CpuArn}","${EbArn}","${RdsArn}","${LambdaArn}"]}},
+          {"type":"metric","x":0,"y":23,"width":6,"height":6,"properties":{"title":"Uptime 7 ngay (%)","region":"${AWS::Region}","view":"singleValue","period":604800,"metrics":[[{"expression":"AVG(m1)*100","label":"Uptime %","id":"e1"}],["MusicWave/Uptime","Up",{"id":"m1","stat":"Average","visible":false}]]}},
+          {"type":"metric","x":6,"y":23,"width":6,"height":6,"properties":{"title":"Uptime theo gio (%)","region":"${AWS::Region}","period":3600,"metrics":[[{"expression":"m1*100","label":"Uptime %","id":"e1"}],["MusicWave/Uptime","Up",{"id":"m1","stat":"Average","visible":false}]],"yAxis":{"left":{"min":0,"max":100}}}},
+          {"type":"metric","x":12,"y":23,"width":12,"height":6,"properties":{"title":"Do tre tu Lambda (ms)","region":"${AWS::Region}","stat":"Average","period":300,"metrics":[["MusicWave/Uptime","LatencyMs","Check","Website"],["MusicWave/Uptime","LatencyMs","Check","ApiHealth"],["MusicWave/Uptime","LatencyMs","Check","ApiSongs"]]}},
           {"type":"metric","x":0,"y":5,"width":8,"height":6,"properties":{"title":"EC2 - CPU (%)","region":"${AWS::Region}","stat":"Average","period":60,"metrics":[["AWS/EC2","CPUUtilization","AutoScalingGroupName","${AutoScalingGroupName}"]],"annotations":{"horizontal":[{"label":"Nguong canh bao","value":70}]},"yAxis":{"left":{"min":0,"max":100}}}},
           {"type":"metric","x":8,"y":5,"width":8,"height":6,"properties":{"title":"EC2 - So may dang chay (tu phuc hoi)","region":"${AWS::Region}","stat":"Average","period":60,"metrics":[["AWS/AutoScaling","GroupInServiceInstances","AutoScalingGroupName","${AutoScalingGroupName}"]],"yAxis":{"left":{"min":0}}}},
           {"type":"metric","x":16,"y":5,"width":8,"height":6,"properties":{"title":"Elastic Beanstalk - Suc khoe (0=OK, 20=Degraded, 25=Severe)","region":"${AWS::Region}","stat":"Maximum","period":60,"metrics":[["AWS/ElasticBeanstalk","EnvironmentHealth","EnvironmentName","${EnvironmentName}"]]}},
@@ -225,7 +282,8 @@ Resources:
           {"type":"metric","x":0,"y":17,"width":12,"height":6,"properties":{"title":"Lambda - So lan chay va loi","region":"${AWS::Region}","stat":"Sum","period":300,"metrics":[["AWS/Lambda","Invocations","FunctionName","${ProcessFn}",{"label":"process-audio: lan chay"}],["AWS/Lambda","Errors","FunctionName","${ProcessFn}",{"label":"process-audio: loi"}],["AWS/Lambda","Invocations","FunctionName","${WeeklyFn}",{"label":"weekly-report: lan chay"}]]}},
           {"type":"metric","x":12,"y":17,"width":12,"height":6,"properties":{"title":"Lambda - Thoi gian xu ly (ms)","region":"${AWS::Region}","stat":"Average","period":300,"metrics":[["AWS/Lambda","Duration","FunctionName","${ProcessFn}"],["AWS/Lambda","Duration","FunctionName","${WeeklyFn}"]]}}
           ]}
-        - CpuArn: !GetAtt Ec2CpuHighAlarm.Arn
+        - UptimeArn: !GetAtt UptimeDownAlarm.Arn
+          CpuArn: !GetAtt Ec2CpuHighAlarm.Arn
           EbArn: !GetAtt EbHealthAlarm.Arn
           RdsArn: !GetAtt RdsLowStorageAlarm.Arn
           LambdaArn: !GetAtt LambdaErrorsAlarm.Arn

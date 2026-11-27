@@ -206,7 +206,7 @@ CI/CD:      GitHub Actions (.github/workflows/deploy-aws.yml) ──OIDC──�
 
 #### Hạ tầng dạng code (CloudFormation)
 
-Toàn bộ phần vận hành (SNS, 4 alarm, Dashboard, Budget, 2 hàm Lambda, quy tắc EventBridge, lịch chạy, IAM role cho Lambda, log group) nằm trong một template [infra/cloudformation/musicwave-ops.yaml](infra/cloudformation/musicwave-ops.yaml). Dựng lại hoặc cập nhật bằng một lệnh:
+Toàn bộ phần vận hành (SNS, 5 alarm, Dashboard, Budget, 3 hàm Lambda, quy tắc EventBridge, lịch chạy, IAM role cho Lambda, log group) nằm trong một template [infra/cloudformation/musicwave-ops.yaml](infra/cloudformation/musicwave-ops.yaml). Dựng lại hoặc cập nhật bằng một lệnh:
 
 ```bash
 ALERT_EMAIL=ban@example.com bash infra/deploy.sh   # cloudformation package + deploy
@@ -241,6 +241,10 @@ aws ec2 terminate-instances --instance-ids $OLD
 |---|---|---|
 | `musicwave-process-audio` | S3 `Object Created` trong `audio/` (qua EventBridge) | Đọc thời lượng, bitrate, sample rate, codec, tag ID3, tách ảnh bìa nhúng; ghi `processed/audio/<tên>.json` và `processed/covers/<tên>.jpg` |
 | `musicwave-weekly-report` | EventBridge Scheduler `cron(0 8 ? * MON *)`, múi giờ Asia/Ho_Chi_Minh | Gọi `/api/health`, lấy Top 10 từ `/api/songs/top-charts`, lưu `reports/weekly/<ngày>.json`, gửi email qua SNS |
+
+| `musicwave-uptime-check` | EventBridge Scheduler `rate(5 minutes)` | Gọi trang chủ, `/api/health`, `/api/songs`; ghi metric `MusicWave/Uptime` (`Up` = 1/0, `LatencyMs` theo từng điểm kiểm tra). Alarm `musicwave-uptime-down` báo email khi lỗi 2 lần liên tiếp; Dashboard có ô **Uptime 7 ngày (%)**, uptime theo giờ và độ trễ |
+
+Uptime monitor thay cho CloudWatch Synthetics và hoàn toàn miễn phí: khoảng 8.640 lần chạy Lambda/tháng (Free Tier 1 triệu), 4 metric tự định nghĩa (Free Tier 10), 5 alarm (Free Tier 10).
 
 Chạy thử (28/11/2026): file WAV 5 giây upload lên `audio/` được xử lý xong sau 532 ms; báo cáo tuần chạy tay trả về Top 10 và độ trễ API 573 ms. Node.js 22 trên ARM64 (Graviton), nằm trong Free Tier 1 triệu lần chạy/tháng.
 
