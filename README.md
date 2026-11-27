@@ -186,6 +186,47 @@ npm run build
 npm run start
 ```
 
+### 9.1. Triển khai trên AWS (ap-southeast-1 – Singapore)
+
+```text
+Trình duyệt ──HTTP──► S3 Static Website (musicwave-web-sg-2026)       ← React build
+     │
+     └──HTTP /api──► Elastic Beanstalk (Musicwave-env, EC2 t3.micro)  ← Express API
+                          ├──► RDS PostgreSQL (musicwave-db, trong VPC)
+                          └──► S3 (musicwave-media-sg-2026)          ← nhạc, ảnh (IAM Role)
+
+Giám sát:  CloudWatch Alarms ──► SNS topic musicwave-alerts ──► Email
+Chi phí:   AWS Budgets musicwave-monthly-5usd (5 USD/tháng, báo ở 85%, 100%, dự báo 100%)
+CI/CD:     GitHub Actions (.github/workflows/deploy-aws.yml) ──OIDC──► S3 + Elastic Beanstalk
+```
+
+| Thành phần | Địa chỉ / tên |
+|---|---|
+| Website | http://musicwave-web-sg-2026.s3-website-ap-southeast-1.amazonaws.com |
+| API | http://musicwave-env.eba-jen3axxp.ap-southeast-1.elasticbeanstalk.com/api |
+| Health check | `GET /api/health` |
+
+**CloudWatch Alarms** (gửi email qua SNS `musicwave-alerts`):
+
+| Alarm | Điều kiện |
+|---|---|
+| `musicwave-ec2-cpu-high` | CPU trung bình của EC2 > 70% trong 5 phút |
+| `musicwave-eb-health-degraded` | `EnvironmentHealth` > 15 (Degraded hoặc Severe) |
+| `musicwave-rds-low-storage` | `FreeStorageSpace` của `musicwave-db` < 2 GB |
+
+**CI/CD (GitHub Actions):** mỗi lần push lên `main` có thay đổi trong `client/` hoặc `server/`:
+1. Frontend: `npm ci` → `vite build` → `aws s3 sync` lên bucket web (thư mục `assets/` trước, `index.html` sau với `no-cache`).
+2. Backend: `npm ci` → `tsc` → zip (`Procfile`, `start.sh`, `package*.json`, `dist`, `prisma`) → tạo Application version mới → `update-environment` → chờ môi trường ổn định → gọi `/api/health`.
+
+Thiết lập một lần:
+1. ✅ IAM → Identity providers: OpenID Connect `token.actions.githubusercontent.com`, audience `sts.amazonaws.com`.
+2. ✅ IAM Role `musicwave-github-actions-deploy` (`arn:aws:iam::586943192758:role/musicwave-github-actions-deploy`):
+   - Trust policy chỉ cho phép `repo:luthanhdat311021-droid/web-nghe-nhac:ref:refs/heads/main`.
+   - Quyền: `AdministratorAccess-AWSElasticBeanstalk` + inline `musicwave-deploy-s3` (đọc/ghi bucket web và bucket Elastic Beanstalk).
+3. GitHub repo → Settings → Secrets and variables → Actions → thêm secret `AWS_DEPLOY_ROLE_ARN` = ARN ở trên.
+
+Không cần lưu access key trong GitHub: OIDC cấp thông tin đăng nhập tạm thời cho mỗi lần chạy.
+
 ---
 
 ## 10. Default Accounts

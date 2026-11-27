@@ -1,0 +1,116 @@
+# CI/CD: tự động build và triển khai MusicWave lên AWS mỗi khi push lên nhánh main.
+# - Frontend: build Vite -> đồng bộ lên S3 static website (assets trước, index.html sau).
+# - Backend:  build TypeScript -> đóng gói zip -> tạo Application version mới trên Elastic Beanstalk.
+# Xác thực AWS bằng OIDC (GitHub tự cấp token tạm thời), không lưu access key trong repo.
+name: Deploy to AWS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'client/**'
+      - 'server/**'
+      - '.github/workflows/deploy-aws.yml'
+  workflow_dispatch:
+
+permissions:
+  id-token: write   # cần cho OIDC
+  contents: read
+
+concurrency:
+  group: deploy-aws
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ap-southeast-1
+  WEB_BUCKET: musicwave-web-sg-2026
+  EB_APP: musicwave
+  EB_ENV: Musicwave-env
+  EB_BUCKET: elasticbeanstalk-ap-southeast-1-586943192758
+  API_URL: http://musicwave-env.eba-jen3axxp.ap-southeast-1.elasticbeanstalk.com/api
+
+jobs:
+  frontend:
+    name: Frontend -> S3
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - run: npm ci
+      - run: npm run build
+        env:
+          VITE_API_URL: ${{ env.API_URL }}
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Upload assets (cache lâu dài, tên file có mã băm)
+        run: |
+          aws s3 sync dist/ s3://$WEB_BUCKET/ \
+            --exclude index.html \
+            --cache-control "public,max-age=31536000,immutable"
+
+      - name: Upload index.html sau cùng (không cache)
+        run: |
+          aws s3 cp dist/index.html s3://$WEB_BUCKET/index.html \
+            --cache-control "no-cache"
+
+      - name: Kiểm tra website
+        run: curl -fsS -o /dev/null -w "HTTP %{http_code}\n" http://$WEB_BUCKET.s3-website-$AWS_REGION.amazonaws.com/
+
+  backend:
+    name: Backend -> Elastic Beanstalk
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: Đóng gói bản triển khai
+        id: pkg
+        run: |
+          LABEL="gh-${GITHUB_SHA::7}-${GITHUB_RUN_NUMBER}"
+          zip -r "../$LABEL.zip" Procfile start.sh package.json package-lock.json dist prisma
+          echo "label=$LABEL" >> "$GITHUB_OUTPUT"
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Tạo Application version và triển khai
+        working-directory: .
+        run: |
+          LABEL=${{ steps.pkg.outputs.label }}
+          aws s3 cp "$LABEL.zip" "s3://$EB_BUCKET/github-actions/$LABEL.zip"
+          aws elasticbeanstalk create-application-version \
+            --application-name "$EB_APP" --version-label "$LABEL" \
+            --source-bundle S3Bucket=$EB_BUCKET,S3Key=github-actions/$LABEL.zip \
+            --description "GitHub Actions ${GITHUB_SHA::7}"
+          aws elasticbeanstalk update-environment \
+            --environment-name "$EB_ENV" --version-label "$LABEL"
+          aws elasticbeanstalk wait environment-updated --environment-names "$EB_ENV"
+
+      - name: Kiểm tra API
+        run: curl -fsS --retry 5 --retry-delay 10 "$API_URL/health"
