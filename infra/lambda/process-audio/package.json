@@ -1,0 +1,10 @@
+{
+  "name": "musicwave-process-audio",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "index.mjs",
+  "dependencies": {
+    "music-metadata": "^11.0.0"
+  }
+}

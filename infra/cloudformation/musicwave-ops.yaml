@@ -1,0 +1,243 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  MusicWave - ha tang van hanh dang code (Infrastructure as Code):
+  giam sat (SNS, CloudWatch Alarms, Dashboard), chi phi (Budgets),
+  serverless xu ly nhac khi upload (S3 -> EventBridge -> Lambda)
+  va bao cao tuan tu dong (EventBridge Scheduler -> Lambda -> SNS email).
+
+Parameters:
+  AlertEmail:
+    Type: String
+    Description: Email nhan canh bao va bao cao tuan
+  MediaBucketName:
+    Type: String
+    Default: musicwave-media-sg-2026
+  EnvironmentName:
+    Type: String
+    Default: Musicwave-env
+  AutoScalingGroupName:
+    Type: String
+    Description: Auto Scaling Group cua moi truong Elastic Beanstalk
+  DBInstanceIdentifier:
+    Type: String
+    Default: musicwave-db
+  ApiUrl:
+    Type: String
+    Default: http://musicwave-env.eba-jen3axxp.ap-southeast-1.elasticbeanstalk.com/api
+  WebsiteUrl:
+    Type: String
+    Default: http://musicwave-web-sg-2026.s3-website-ap-southeast-1.amazonaws.com
+  MonthlyBudgetUsd:
+    Type: Number
+    Default: 5
+
+Resources:
+  # ---------------------------------------------------------------- Thong bao
+  AlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: musicwave-alerts
+      DisplayName: MusicWave Alerts
+
+  AlertsEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref AlertsTopic
+      Protocol: email
+      Endpoint: !Ref AlertEmail
+
+  # ---------------------------------------------------------------- Canh bao
+  Ec2CpuHighAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: musicwave-ec2-cpu-high
+      AlarmDescription: CPU trung binh cua EC2 backend MusicWave vuot 70% trong 5 phut
+      Namespace: AWS/EC2
+      MetricName: CPUUtilization
+      Dimensions: [{ Name: AutoScalingGroupName, Value: !Ref AutoScalingGroupName }]
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 70
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlertsTopic]
+      OKActions: [!Ref AlertsTopic]
+
+  EbHealthAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: musicwave-eb-health-degraded
+      AlarmDescription: Moi truong Elastic Beanstalk o muc Degraded (20) hoac Severe (25)
+      Namespace: AWS/ElasticBeanstalk
+      MetricName: EnvironmentHealth
+      Dimensions: [{ Name: EnvironmentName, Value: !Ref EnvironmentName }]
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 15
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: missing
+      AlarmActions: [!Ref AlertsTopic]
+      OKActions: [!Ref AlertsTopic]
+
+  RdsLowStorageAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: musicwave-rds-low-storage
+      AlarmDescription: Dung luong trong cua RDS duoi 2 GB
+      Namespace: AWS/RDS
+      MetricName: FreeStorageSpace
+      Dimensions: [{ Name: DBInstanceIdentifier, Value: !Ref DBInstanceIdentifier }]
+      Statistic: Minimum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 2000000000
+      ComparisonOperator: LessThanThreshold
+      AlarmActions: [!Ref AlertsTopic]
+
+  LambdaErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: musicwave-lambda-errors
+      AlarmDescription: Ham Lambda xu ly nhac bi loi
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions: [{ Name: FunctionName, Value: !Ref ProcessAudioFunction }]
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlertsTopic]
+
+  # ---------------------------------------------------------------- Chi phi
+  MonthlyBudget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: musicwave-monthly-5usd
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit: { Amount: !Ref MonthlyBudgetUsd, Unit: USD }
+      NotificationsWithSubscribers:
+        - Notification: { NotificationType: ACTUAL, ComparisonOperator: GREATER_THAN, Threshold: 85, ThresholdType: PERCENTAGE }
+          Subscribers: [{ SubscriptionType: EMAIL, Address: !Ref AlertEmail }]
+        - Notification: { NotificationType: ACTUAL, ComparisonOperator: GREATER_THAN, Threshold: 100, ThresholdType: PERCENTAGE }
+          Subscribers: [{ SubscriptionType: EMAIL, Address: !Ref AlertEmail }]
+        - Notification: { NotificationType: FORECASTED, ComparisonOperator: GREATER_THAN, Threshold: 100, ThresholdType: PERCENTAGE }
+          Subscribers: [{ SubscriptionType: EMAIL, Address: !Ref AlertEmail }]
+
+  # ---------------------------------------------------------------- Serverless: xu ly nhac khi upload
+  ProcessAudioFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: musicwave-process-audio
+      Description: Doc thong tin ky thuat va anh bia cua file nhac moi upload len S3
+      CodeUri: ../lambda/process-audio/
+      Handler: index.handler
+      Runtime: nodejs22.x
+      Architectures: [arm64]
+      MemorySize: 512
+      Timeout: 60
+      LoggingConfig: { LogFormat: Text }
+      Policies:
+        - S3ReadPolicy: { BucketName: !Ref MediaBucketName }
+        - Statement:
+            - Effect: Allow
+              Action: s3:PutObject
+              Resource: !Sub arn:aws:s3:::${MediaBucketName}/processed/*
+      Events:
+        AudioUploaded:
+          Type: EventBridgeRule
+          Properties:
+            RuleName: musicwave-audio-uploaded
+            Pattern:
+              source: [aws.s3]
+              detail-type: [Object Created]
+              detail:
+                bucket: { name: [!Ref MediaBucketName] }
+                object: { key: [{ prefix: audio/ }] }
+
+  ProcessAudioLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${ProcessAudioFunction}
+      RetentionInDays: 14
+
+  # ---------------------------------------------------------------- Serverless: bao cao tuan
+  WeeklyReportFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: musicwave-weekly-report
+      Description: Kiem tra API, lay Top 10 bai hat, luu bao cao va gui email moi thu Hai
+      CodeUri: ../lambda/weekly-report/
+      Handler: index.handler
+      Runtime: nodejs22.x
+      Architectures: [arm64]
+      MemorySize: 256
+      Timeout: 30
+      Environment:
+        Variables:
+          API_URL: !Ref ApiUrl
+          WEBSITE_URL: !Ref WebsiteUrl
+          TOPIC_ARN: !Ref AlertsTopic
+          REPORT_BUCKET: !Ref MediaBucketName
+      Policies:
+        - SNSPublishMessagePolicy: { TopicName: !GetAtt AlertsTopic.TopicName }
+        - Statement:
+            - Effect: Allow
+              Action: s3:PutObject
+              Resource: !Sub arn:aws:s3:::${MediaBucketName}/reports/*
+      Events:
+        EveryMonday:
+          Type: ScheduleV2
+          Properties:
+            Name: musicwave-weekly-report
+            Description: 8:00 sang thu Hai gio Viet Nam
+            ScheduleExpression: cron(0 8 ? * MON *)
+            ScheduleExpressionTimezone: Asia/Ho_Chi_Minh
+
+  WeeklyReportLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${WeeklyReportFunction}
+      RetentionInDays: 14
+
+  # ---------------------------------------------------------------- Dashboard
+  Dashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: musicwave-overview
+      DashboardBody: !Sub
+        - |
+          {"widgets":[
+          {"type":"text","x":0,"y":0,"width":24,"height":2,"properties":{"markdown":"# MusicWave tren AWS (${AWS::Region})\nS3 Website -> Elastic Beanstalk (EC2) -> RDS PostgreSQL | Upload nhac -> EventBridge -> Lambda | Canh bao qua SNS. Tao boi CloudFormation stack ${AWS::StackName}."}},
+          {"type":"alarm","x":0,"y":2,"width":24,"height":3,"properties":{"title":"Trang thai canh bao","alarms":["${CpuArn}","${EbArn}","${RdsArn}","${LambdaArn}"]}},
+          {"type":"metric","x":0,"y":5,"width":8,"height":6,"properties":{"title":"EC2 - CPU (%)","region":"${AWS::Region}","stat":"Average","period":60,"metrics":[["AWS/EC2","CPUUtilization","AutoScalingGroupName","${AutoScalingGroupName}"]],"annotations":{"horizontal":[{"label":"Nguong canh bao","value":70}]},"yAxis":{"left":{"min":0,"max":100}}}},
+          {"type":"metric","x":8,"y":5,"width":8,"height":6,"properties":{"title":"EC2 - So may dang chay (tu phuc hoi)","region":"${AWS::Region}","stat":"Average","period":60,"metrics":[["AWS/AutoScaling","GroupInServiceInstances","AutoScalingGroupName","${AutoScalingGroupName}"]],"yAxis":{"left":{"min":0}}}},
+          {"type":"metric","x":16,"y":5,"width":8,"height":6,"properties":{"title":"Elastic Beanstalk - Suc khoe (0=OK, 20=Degraded, 25=Severe)","region":"${AWS::Region}","stat":"Maximum","period":60,"metrics":[["AWS/ElasticBeanstalk","EnvironmentHealth","EnvironmentName","${EnvironmentName}"]]}},
+          {"type":"metric","x":0,"y":11,"width":8,"height":6,"properties":{"title":"RDS - CPU (%)","region":"${AWS::Region}","stat":"Average","period":300,"metrics":[["AWS/RDS","CPUUtilization","DBInstanceIdentifier","${DBInstanceIdentifier}"]]}},
+          {"type":"metric","x":8,"y":11,"width":8,"height":6,"properties":{"title":"RDS - So ket noi","region":"${AWS::Region}","stat":"Average","period":300,"metrics":[["AWS/RDS","DatabaseConnections","DBInstanceIdentifier","${DBInstanceIdentifier}"]]}},
+          {"type":"metric","x":16,"y":11,"width":8,"height":6,"properties":{"title":"RDS - Dung luong trong (byte)","region":"${AWS::Region}","stat":"Minimum","period":300,"metrics":[["AWS/RDS","FreeStorageSpace","DBInstanceIdentifier","${DBInstanceIdentifier}"]],"annotations":{"horizontal":[{"label":"Nguong 2 GB","value":2000000000}]}}},
+          {"type":"metric","x":0,"y":17,"width":12,"height":6,"properties":{"title":"Lambda - So lan chay va loi","region":"${AWS::Region}","stat":"Sum","period":300,"metrics":[["AWS/Lambda","Invocations","FunctionName","${ProcessFn}",{"label":"process-audio: lan chay"}],["AWS/Lambda","Errors","FunctionName","${ProcessFn}",{"label":"process-audio: loi"}],["AWS/Lambda","Invocations","FunctionName","${WeeklyFn}",{"label":"weekly-report: lan chay"}]]}},
+          {"type":"metric","x":12,"y":17,"width":12,"height":6,"properties":{"title":"Lambda - Thoi gian xu ly (ms)","region":"${AWS::Region}","stat":"Average","period":300,"metrics":[["AWS/Lambda","Duration","FunctionName","${ProcessFn}"],["AWS/Lambda","Duration","FunctionName","${WeeklyFn}"]]}}
+          ]}
+        - CpuArn: !GetAtt Ec2CpuHighAlarm.Arn
+          EbArn: !GetAtt EbHealthAlarm.Arn
+          RdsArn: !GetAtt RdsLowStorageAlarm.Arn
+          LambdaArn: !GetAtt LambdaErrorsAlarm.Arn
+          ProcessFn: !Ref ProcessAudioFunction
+          WeeklyFn: !Ref WeeklyReportFunction
+
+Outputs:
+  AlertsTopicArn:
+    Value: !Ref AlertsTopic
+  ProcessAudioFunctionName:
+    Value: !Ref ProcessAudioFunction
+  WeeklyReportFunctionName:
+    Value: !Ref WeeklyReportFunction
+  DashboardUrl:
+    Value: !Sub https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards/dashboard/musicwave-overview
